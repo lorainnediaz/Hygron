@@ -158,3 +158,198 @@ If the GitHub repository already exists, see the push instructions supplied alon
 ## Academic scope
 
 Hygron demonstrates the integration of **IoT (COSC 111)**, **HCI (ITEC 80)** and **supervised ML (COSC 105)** through a software prototype. It is for teaching, demonstration and evaluation—not building certification, physical mold detection or production hotel monitoring.
+
+
+---
+
+# Development Handover Guide
+
+Hygron is an existing Software-in-the-Loop (SIL) Digital Twin prototype integrating virtual IoT devices, machine learning, and a client-facing monitoring dashboard.
+
+| Developer | Assignment | Primary Responsibility |
+|---|---|---|
+| Paolo | IoT | Improve the virtual hardware simulation, component visualization, and data-flow demonstration |
+| Karlo and Han | HCI | Improve the client-facing dashboard, usability, accessibility, and presentation of monitoring information |
+
+Developers are encouraged to explore their own design ideas. The existing implementation serves as the foundation, not a strict limitation on visual design or interaction.
+
+## Paolo — IoT Simulation
+
+### Objective
+
+Improve the existing IoT Workbench to resemble an interactive, Wokwi-inspired hardware simulation.
+
+The simulator should clearly communicate how environmental data travels through the following architecture:
+
+**BME680 Sensor → ESP32 → Raspberry Pi Edge Gateway → Internet → Cloud → Machine Learning → Streamlit Dashboard**
+
+Users should be able to understand the purpose of each simulated component and observe how information moves through the system when the simulation runs.
+
+### Suggested Improvements
+
+- Improve the appearance and arrangement of virtual components.
+- Make components resemble physical hardware or recognizable electronic modules.
+- Represent wired and wireless connections appropriately.
+- Improve packet or particle animations during data transmission.
+- Make the simulation stages more understandable through visual feedback.
+- Add an information tooltip or explanation when a simulation stage is triggered.
+- Improve the overall interaction and presentation of the IoT Workbench.
+
+These are suggestions, not strict implementation requirements. The developer may introduce alternative designs as long as the underlying architecture remains understandable and functional.
+
+### Why We Are Not Using Wokwi Exclusively
+
+Wokwi is useful for demonstrating virtual circuits, microcontrollers, sensors, and embedded programming.
+
+However, Hygron's machine learning models were trained in Python using scikit-learn and require historical environmental features extending up to 60 days.
+
+Running the existing ML pipeline directly inside a Wokwi ESP32 would require additional work, including translating or replacing the Python inference logic and implementing historical feature processing in an embedded environment.
+
+Our system also simulates Raspberry Pi edge processing, Internet connectivity, cloud storage, and a separate client dashboard.
+
+For these reasons, we selected a Python-based SIL Digital Twin that represents the complete architecture without requiring firmware conversion.
+
+A separate Wokwi demonstration may still be used as supplementary evidence of the proposed hardware design.
+
+### Relevant IoT Files
+
+| File | Purpose |
+|---|---|
+| `simulation/app.py` | Main IoT Workbench interface and simulation controls |
+| `board_visual.py` | Virtual hardware board and data-flow visualization |
+| `sensor_simulator.py` | Virtual environmental sensor and ESP32 behavior |
+| `edge_gateway.py` | Raspberry Pi edge processing, validation, and aggregation |
+| `network_cloud.py` | Simulated Internet connectivity and cloud transmission |
+| `simulation/bulk_engine.py` | Multi-room simulation and time advancement |
+| `shared_store.py` | Shared SQLite data storage |
+| `simulation/README.md` | Additional simulator documentation |
+
+### Important Warnings
+
+1. **Do not break the existing simulation pipeline.** Changes to animations or component visuals should not interfere with data generation, validation, aggregation, or storage.
+
+2. **Visual data transmission should represent actual simulation stages.** Avoid showing successful delivery when the ESP32 or Internet connection is offline.
+
+3. **Keep simulated components clearly identified.** The Raspberry Pi, Internet, sensors, and cloud are represented through Python rather than physical hardware or external cloud services.
+
+4. **Preserve room-specific simulation data.** Switching or simulating multiple rooms should not overwrite another room's history or introduce unintended timestamp gaps.
+
+5. **Coordinate changes to shared files.** Changes to `shared_store.py`, `ml_bridge.py`, or data structures may affect the HCI dashboard.
+
+---
+
+## Han and Karlo — HCI Dashboard
+
+### Objective
+
+Improve Hygron's client-facing dashboard for hotel owners, facility managers, and maintenance personnel.
+
+The goal is to make environmental monitoring and mold-growth risk information easy to understand, accessible, and useful for decision-making.
+
+The developer has creative freedom regarding layout, navigation, visual style, components, and interactions.
+
+### HCI Areas to Consider
+
+The dashboard should continue supporting the project's main HCI focus areas:
+
+- **Real-time risk status and visual indicators**
+- **Alerts and notification design**
+- **Trend visualization and historical views**
+- **Forecasting and predictive decision support**
+- **Usability evaluation**
+- **Accessibility and inclusive design**
+
+The developer may improve existing components, reorganize information, or introduce additional features where appropriate.
+
+Design decisions should consider clarity, information overload, alert fatigue, accessible status indicators, and the needs of non-technical hotel personnel.
+
+For evaluation, consider the System Usability Scale (SUS), task success rate, completion time, and user errors.
+
+Accessibility improvements should consider WCAG-aligned practices such as sufficient contrast, readable typography, semantic structure, non-color indicators, and text alternatives for important charts.
+
+### Relevant HCI Files
+
+| File | Purpose |
+|---|---|
+| `dashboard/app.py` | Main client-facing HCI dashboard |
+| `app.py` | Root Streamlit application entry point |
+| `ml_bridge.py` | Connects historical room data to ML inference |
+| `inference.py` | Loads trained ML models and produces risk estimates |
+| `shared_store.py` | Reads and stores room monitoring data |
+| `models/current_risk_rf.joblib` | Trained current-risk Random Forest |
+| `models/forecast_24h_rf.joblib` | Trained 24-hour forecasting Random Forest |
+| `models/model_metadata.json` | Model features, labels, and configuration |
+| `dashboard/README.md` | Additional dashboard documentation |
+
+### Important Warnings
+
+1. **Do not replace actual ML predictions with hardcoded risk labels.** Low, Medium, and High statuses should reflect the model output whenever valid predictions are available.
+
+2. **Do not present simulated readings as real-world sensor measurements.** This is a software-based prototype.
+
+3. **Do not present forecasting as guaranteed.** The 24-hour forecast is supplementary and has documented limitations, particularly in anticipating changes in risk.
+
+4. **Do not imply that Hygron detects physical mold.** The models estimate VTT-derived mold-growth risk based on environmental conditions.
+
+5. **Do not rely on color alone.** Risk statuses should also use text, icons, or other understandable indicators.
+
+6. **Avoid excessive alerts.** Notifications should help staff identify important conditions without overwhelming users.
+
+7. **Handle unavailable predictions clearly.** Offline sensors, incomplete history, and model errors should not be displayed as Low risk.
+
+8. **Preserve ML compatibility.** The models depend on nine specific features and historical environmental data. Changes to feature generation or model inputs must be coordinated before implementation.
+
+9. **Coordinate changes to shared modules.** The dashboard and IoT Workbench use the same underlying monitoring data.
+
+---
+
+## Shared Task — Timezone Consistency
+
+**Both developers must address timezone consistency.**
+
+Hygron is intended for use in the Philippines. The application's default display timezone should therefore be:
+
+`Asia/Manila (UTC+08:00)`
+
+Review timestamp handling throughout the IoT simulator, shared database, machine learning pipeline, and HCI dashboard.
+
+### Important Considerations
+
+- Store timestamps using a consistent timezone convention, preferably UTC.
+- Convert timestamps to `Asia/Manila` when presenting them to users.
+- Clearly distinguish simulated time from actual system time.
+- Avoid mixing timezone-aware and timezone-naive timestamps.
+- Preserve chronological ordering when calculating historical ML features.
+- Ensure that simulation, alert, and forecast timestamps refer to the correct time.
+- Avoid changing the interpretation of existing historical records without checking compatibility.
+
+The 24-hour forecast should be displayed relative to the latest simulated observation, not automatically relative to the user's actual current clock.
+
+---
+
+## General Development Guidelines
+
+- Preserve the existing working implementation before making major changes.
+- Use separate Git branches for IoT and HCI development.
+- Avoid unnecessarily modifying trained models or established ML feature definitions.
+- Test the application after changes.
+- Keep documentation updated when adding or changing functionality.
+- Communicate before editing shared modules.
+- Do not commit temporary databases, caches, environment files, or credentials.
+- Keep experimental functionality clearly distinguished from completed functionality.
+
+### Suggested Git Branches
+
+- `feature/iot-improvements`
+- `feature/hci-improvements`
+
+Both developers should work independently on their respective branches and merge tested changes into `main`.
+
+### Existing Prototype Scope
+
+Hygron currently demonstrates a software-simulated IoT architecture with a virtual Raspberry Pi gateway, Internet connection, cloud storage, machine learning inference, and client dashboard.
+
+The objective of this handover is to improve the quality, usability, and presentation of the existing system while maintaining its core functionality.
+
+---
+
