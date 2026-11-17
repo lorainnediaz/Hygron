@@ -1,0 +1,35 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# Local generated demonstration data
+data/*.sqlite3
+data/*.sqlite3-*
+data/*.db
+data/*.db-*
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+
+# Credentials and personal config
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Editor, OS, local outputs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+simulation/demo_output/
+demo_output/
+
+# Model files intentionally INCLUDED in repo for demo
+# models/*.joblib

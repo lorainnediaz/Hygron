@@ -1,0 +1,30 @@
+{
+  "selected_features": [
+    "rh",
+    "temp",
+    "dew_point",
+    "dew_margin",
+    "rh_mean_24h",
+    "rh_mean_60D",
+    "rh_std_24h",
+    "rh_change_1h",
+    "frac_above80_60D"
+  ],
+  "label_classes_encoded_order": [
+    "High",
+    "Low",
+    "Medium"
+  ],
+  "current_model": "RandomForestClassifier",
+  "forecast_model": "RandomForestClassifier",
+  "n_estimators": 100,
+  "max_depth": 12,
+  "forecast_horizon_hours": 24,
+  "sampling_for_training_minutes": 60,
+  "minimum_history_days": 60,
+  "training_data": "simulated VTT-derived labels; not physical mold observations",
+  "scikit_learn_version": "1.7.2",
+  "xgboost_version_for_experiments": "3.4.1",
+  "numpy_version": "2.5.1",
+  "pandas_version": "2.3.3"
+}
