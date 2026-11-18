@@ -1,119 +1,169 @@
-"""Self-contained, browser-animated circuit-board SVG for the simulated IoT path.
-
-Physical wiring is drawn only between the virtual BME680 and ESP32 board.
-Remaining links represent wireless/data-network signals, not copper wiring.
-"""
+"""Layered architecture diagram for Hygron's virtual IoT simulator."""
 from __future__ import annotations
-from html import escape
 
-# Source/target x coordinates of the arrows; the active path is highlighted during a step.
-NODES = [
-    ("sensor", "BME680 SENSOR", "Temp · RH · Gas", 36, 126),
-    ("esp", "ESP32 NODE", "30-second packets", 270, 126),
-    ("rpi", "RASPBERRY PI", "5-minute aggregation", 504, 126),
-    ("net", "INTERNET", "simulated link", 738, 126),
-    ("cloud", "CLOUD", "in-memory storage", 972, 126),
-    ("dash", "DASHBOARD", "Streamlit UI", 1206, 126),
+from base64 import b64encode
+from html import escape
+from pathlib import Path
+
+STEPS = [
+    "Idle", "BME680 → ESP32", "ESP32 → Raspberry Pi",
+    "Raspberry Pi → Internet", "Internet → SQLite", "SQLite → Dashboard",
 ]
 
-# 0: idle, 1: sensor->ESP, 2: ESP->RPi, 3: RPi->Internet,
-# 4: Internet->Cloud, 5: Cloud->Dashboard
-STEPS = ["Idle", "BME680 → ESP32", "ESP32 → Raspberry Pi",
-         "Raspberry Pi → Internet", "Internet → Cloud", "Cloud → Dashboard"]
 
-
-def _symbol(kind: str, x: int, y: int) -> str:
-    cx = x + 87
-    if kind == "sensor":
-        return f'<g stroke="#62d9d5" stroke-width="4" fill="none"><path d="M {cx-18} {y+67} v 33 a 20 20 0 1 0 16 0 v -33 a 8 8 0 0 0 -16 0"/><path d="M {cx-10} {y+81} v 25"/></g>'
-    if kind == "esp":
-        return f'<g fill="none" stroke="#62d9d5" stroke-width="3"><rect x="{cx-25}" y="{y+60}" width="50" height="49" rx="7"/><rect x="{cx-12}" y="{y+74}" width="24" height="20" rx="2"/><path d="M {cx-42} {y+72} h 16 M {cx-42} {y+86} h 16 M {cx+26} {y+72} h 16 M {cx+26} {y+86} h 16"/></g>'
-    if kind == "rpi":
-        return f'<g stroke="#62d9d5" fill="none" stroke-width="3"><rect x="{cx-31}" y="{y+60}" width="62" height="49" rx="6"/><rect x="{cx-9}" y="{y+71}" width="21" height="21" rx="3"/><path d="M {cx-19} {y+53} v 7 M {cx-5} {y+53} v 7 M {cx+9} {y+53} v 7 M {cx+23} {y+53} v 7"/></g>'
-    if kind == "net":
-        return f'<g stroke="#62d9d5" fill="none" stroke-width="3"><circle cx="{cx}" cy="{y+85}" r="27"/><ellipse cx="{cx}" cy="{y+85}" rx="10" ry="27"/><path d="M {cx-27} {y+85} h 54 M {cx-22} {y+72} h44 M {cx-22} {y+98} h44"/></g>'
-    if kind == "cloud":
-        return f'<path d="M {cx-32} {y+101} h 63 a 16 16 0 0 0 0 -32 a 26 26 0 0 0 -49 -6 a 19 19 0 0 0 -14 38z" stroke="#62d9d5" stroke-width="3.5" fill="none"/>'
-    return f'<g stroke="#62d9d5" stroke-width="3" fill="none"><rect x="{cx-37}" y="{y+57}" width="74" height="49" rx="4"/><path d="M {cx-27} {y+67} h 27 v 16 h 26 M {cx-16} {y+114} h 32 M {cx} {y+106} v 8"/></g>'
+def _image_data_uri(filename: str) -> str:
+    """Embed local photos so the isolated Streamlit iframe can display them."""
+    image_path = Path(__file__).resolve().parent / "images" / filename
+    if not image_path.is_file():
+        return ""
+    return "data:image/jpeg;base64," + b64encode(image_path.read_bytes()).decode("ascii")
 
 
 def render_board(stage=0, sensor_online=True, internet_online=True,
                  latest_summary=None, cloud_count=0, queue_count=0, clock="—") -> str:
-    """Return standalone SVG/HTML, no script or external assets needed."""
+    """Build a self-contained three-layer SVG with live simulator state."""
     stage = max(0, min(5, int(stage)))
     summary = latest_summary or {}
-    quality = "Complete" if summary.get("complete") else "Incomplete" if summary else "No summary"
-    badges = {
-        "sensor": ("ONLINE", "#55e2a4") if sensor_online else ("OFFLINE", "#f77981"),
-        "esp": ("ONLINE", "#55e2a4") if sensor_online else ("OFFLINE", "#f77981"),
-        "rpi": (quality.upper(), "#55e2a4" if summary.get("complete") else "#f2c06d"),
-        "net": ("ONLINE", "#55e2a4") if internet_online else ("OFFLINE", "#f77981"),
-        "cloud": (f"{cloud_count} RECORDS", "#55e2a4"),
-        "dash": ("READY", "#55e2a4"),
-    }
-    cards = []
-    for key, name, desc, x, y in NODES:
-        label, color = badges[key]
-        cards.append(f'''
-          <g>
-          <rect x="{x}" y="{y}" width="174" height="216" rx="15" fill="#151e2e" stroke="#3c5065" stroke-width="1.5"/>
-          <rect x="{x+11}" y="{y+11}" width="152" height="194" rx="10" fill="#19273b" stroke="#22344a"/>
-          {_symbol(key,x,y)}
-          <text x="{x+87}" y="{y+137}" fill="#eef8ff" font-size="14" text-anchor="middle" font-weight="700">{name}</text>
-          <text x="{x+87}" y="{y+158}" fill="#a9bccb" font-size="12" text-anchor="middle">{desc}</text>
-          <circle cx="{x+21}" cy="{y+185}" r="5" fill="{color}"/>
-          <text x="{x+33}" y="{y+189}" fill="{color}" font-size="11" font-weight="600">{escape(label)}</text>
-          </g>''')
-    wires = []
-    # The only hardware-style wires: I2C sensor on the ESP32 board.
-    for dy, color, tag in [(0, "#5be2c0", "SDA"), (8, "#ffcb65", "SCL"), (16, "#fc8a96", "3V3"), (24, "#8fa4bd", "GND")]:
-        y = 199 + dy
-        wires.append(f'<path d="M 210 {y} L 270 {y}" stroke="{color}" stroke-width="3" fill="none" stroke-linecap="round"/>')
-    wires.append('<text x="240" y="185" text-anchor="middle" fill="#bdccd9" font-size="11">I²C WIRES</text>')
-    paths = [
-        'M 210 211 L 270 211',
-        'M 444 211 L 504 211',
-        'M 678 211 L 738 211',
-        'M 912 211 L 972 211',
-        'M 1146 211 L 1206 211',
-    ]
-    for idx, p in enumerate(paths):
-        if idx:
-            blocked = (idx == 1 and not sensor_online) or (idx >= 2 and not internet_online)
-            color = '#5a6c86' if blocked else '#66aef8'
-            wires.append(f'<path d="{p}" stroke="{color}" stroke-width="3" stroke-dasharray="4 8" fill="none"/>')
-            wires.append(f'<path d="{p}" stroke="{color}" stroke-width="2" fill="none" marker-end="url(#arrow)"/>')
-            wires.append(f'<text x="{(210 if idx==0 else 444+(idx-1)*234)+30}" y="187" text-anchor="middle" fill="#a9bccb" font-size="11">SIGNAL</text>')
-        if idx + 1 == stage and not ((idx == 1 and not sensor_online) or (idx >= 2 and not internet_online)):
-            # Flow particles animate along the currently active hop only.
-            for offset in ['0s', '-0.45s', '-0.9s']:
-                wires.append(f'''<circle r="5" fill="#67f5ca" filter="url(#glow)">
-                    <animateMotion dur="1.35s" begin="{offset}" repeatCount="indefinite" path="{p}"/>
-                </circle>''')
+    complete = bool(summary.get("complete"))
+    quality = "COMPLETE" if complete else "INCOMPLETE" if summary else "WAITING"
+    quality_color = "#39d8a0" if complete else "#f1b85b" if summary else "#9aabc0"
+    sensor_status, sensor_color = ("ONLINE", "#39d8a0") if sensor_online else ("OFFLINE", "#ff647c")
+    internet_status, internet_color = ("ONLINE", "#39d8a0") if internet_online else ("OFFLINE", "#ff647c")
+    cloud_status = f"{int(cloud_count):,} STORED" if cloud_count else "READY"
+    queued = max(0, int(queue_count))
     active = escape(STEPS[stage])
-    return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-       html,body {{ margin:0; background:transparent; color:#e8f1fa; font-family:system-ui,Segoe UI,Arial,sans-serif; }}
-       .viewport {{ overflow-x:auto; background:linear-gradient(135deg,#0c1321,#141e2e); border-radius:16px;
-                   border:1px solid #2a3e53; }}
-       .hint {{ padding:12px 18px; font-size:13px; color:#a7bed1; }}
-       .hint b {{ color:#77e9c9; }}
-    </style></head><body><div class="viewport">
-       <svg viewBox="0 0 1416 465" width="100%" style="min-width:920px" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hygron simulated IoT component board">
-       <defs>
-         <pattern id="dots" width="25" height="25" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#31425b"/></pattern>
-         <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#66aef8"/></marker>
-         <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-       </defs>
-       <rect x="0" y="0" width="1416" height="465" fill="url(#dots)"/>
-       <text x="38" y="52" font-weight="700" font-size="24" fill="#f1f7fd">HYGRON  /  VIRTUAL IoT BOARD</text>
-       <text x="39" y="77" font-size="13" fill="#a2b8c9">Software-in-the-loop · no physical hardware, external requests, or real cloud</text>
-       <text x="1370" y="54" fill="#7de6cb" font-size="14" text-anchor="end">ACTIVE STEP: {active}</text>
-       <g>{''.join(wires)}</g>
-       <g>{''.join(cards)}</g>
-       <rect x="34" y="381" width="1348" height="56" rx="11" fill="#18283a" stroke="#35506a"/>
-       <text x="54" y="405" fill="#d7e9f5" font-size="14">WIRE: Sensor → ESP32 (I²C)</text>
-       <text x="385" y="405" fill="#d7e9f5" font-size="14">DASHED: wireless/network messages</text>
-       <text x="865" y="405" fill="#d7e9f5" font-size="14">QUEUED: {int(queue_count)}</text>
-       <text x="1125" y="405" fill="#d7e9f5" font-size="14">TIME: {escape(str(clock))}</text>
-       <text x="54" y="426" fill="#9cb2c3" font-size="12">Glowing particles indicate the current simulated transmission stage, not actual electronics or network traffic.</text>
-       </svg></div></body></html>'''
+    bme = _image_data_uri("bme680.jpg")
+    esp = _image_data_uri("esp32.jpg")
+    pi = _image_data_uri("raspberry-pi.jpg")
+
+    # Stage 1 stays within the room. Stage 2 crosses to the edge gateway;
+    # stages 3–4 cross the simulated Internet boundary; stage 5 reaches the UI.
+    routes = [
+        ("M 220 353 V 429", 1, sensor_online, "SENSOR BUS", 145, 395, False),
+        ("M 380 535 H 433 Q 448 535 448 520 V 425 Q 448 410 463 410 H 525", 2, sensor_online, "VIA Wi-Fi", 440, 568, True),
+        ("M 825 395 H 880", 3, internet_online, "EDGE → WAN", 852, 354, True),
+        ("M 926 395 H 1000", 4, internet_online, "UPLOAD", 964, 354, True),
+        ("M 1160 495 V 520", 5, internet_online, "DASHBOARD READ", 1282, 513, True),
+    ]
+    route_groups = []
+    for path, hop, available, label, label_x, label_y, dashed in routes:
+        group = []
+        active_hop = stage == hop and available
+        color = "#45d6ae" if active_hop else "#637991" if not available else "#58a6ff"
+        dash = ' stroke-dasharray="8 8"' if dashed else ""
+        group.append(
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="4"{dash}'
+            ' stroke-linecap="round" marker-end="url(#arrow)"/>'
+        )
+        group.append(f'<text x="{label_x}" y="{label_y}" text-anchor="middle" class="wire-label">{label}</text>')
+        if active_hop:
+            for offset in ("0s", "-.45s", "-.9s"):
+                group.append(
+                    f'<circle r="5" fill="#b5ffea" filter="url(#glow)">'
+                    f'<animateMotion dur="1.1s" begin="{offset}" repeatCount="indefinite" path="{path}"/>'
+                    "</circle>"
+                )
+        route_groups.append(group)
+
+    return f'''<!doctype html><html><head><meta charset="utf-8"><style>
+    * {{ box-sizing:border-box }} html,body {{ margin:0; background:transparent; color:#e8f1fa;
+      font-family:Inter,system-ui,"Segoe UI",Arial,sans-serif }}
+    .canvas {{ width:100%; overflow-x:auto; border:1px solid #2a4059; border-radius:16px;
+      background:#101a29; box-shadow:0 12px 34px #050a1280 }}
+    svg {{ display:block; width:100%; min-width:900px }}
+    .eyebrow {{ fill:#93abc2; font-size:12px; letter-spacing:2px; font-weight:650 }}
+    .title {{ fill:#f1f7fd; font-size:23px; font-weight:750 }}
+    .sub {{ fill:#a8bacd; font-size:12px }} .layer-title {{ fill:#79d6bf; font-size:17px; font-weight:700 }}
+    .name {{ fill:#f3f7fc; font-size:14px; font-weight:750 }} .detail {{ fill:#afc2d5; font-size:11px }}
+    .status {{ font-size:10px; font-weight:750; letter-spacing:.5px }}
+    .wire-label {{ fill:#9db0c4; font-size:9px; font-weight:700; letter-spacing:.7px }}
+    </style></head><body><div class="canvas">
+    <svg viewBox="0 0 1400 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hygron room, edge, and cloud user interface layers">
+      <defs>
+        <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#26374b"/></pattern>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10z" fill="#58a6ff"/></marker>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <rect width="1400" height="760" fill="#101a29"/><rect width="1400" height="760" fill="url(#grid)"/>
+      <text x="40" y="39" class="eyebrow">HYGRON  /  VIRTUAL IoT WORKBENCH</text>
+      <text x="40" y="68" class="title">System architecture</text>
+      <text x="40" y="89" class="sub">Synthetic room readings move through the edge gateway to local storage and the hotel dashboard.</text>
+      <rect x="910" y="27" width="450" height="46" rx="10" fill="#1a2b3e" stroke="#2b4561"/>
+      <circle cx="931" cy="50" r="5" fill="#45d6ae"/><text x="946" y="54" fill="#b9cad9" font-size="11" font-weight="600">ACTIVE STEP</text>
+      <text x="1040" y="54" fill="#76e8c9" font-size="12" font-weight="700">{active}</text>
+
+      <!-- Layer panels -->
+      <rect x="35" y="112" width="390" height="574" rx="18" fill="#142233" stroke="#2e465d" stroke-width="1.5"/>
+      <rect x="475" y="112" width="400" height="574" rx="18" fill="#142a2c" stroke="#31574f" stroke-width="1.5"/>
+      <rect x="960" y="112" width="405" height="574" rx="18" fill="#142233" stroke="#2e465d" stroke-width="1.5"/>
+      <text x="62" y="145" class="layer-title">1. Room Layer</text>
+      <text x="504" y="145" class="layer-title">2. Edge Layer</text>
+      <text x="988" y="145" class="layer-title">3. Cloud &amp; UI Layer</text>
+
+      <!-- Room layer: sensor above the ESP32 -->
+      <g>
+        <rect x="80" y="167" width="300" height="183" rx="16" fill="#1c2d3f" stroke="#405a70" stroke-width="1.5"/>
+        <text x="86" y="195" class="name">SENSORS</text>
+        <rect x="97" y="207" width="266" height="94" rx="8" fill="#eef0f2"/>
+        {f'<image href="{bme}" x="97" y="207" width="266" height="94" preserveAspectRatio="xMidYMid meet"/>' if bme else '<text x="230" y="258" text-anchor="middle" fill="#183044" font-size="15" font-weight="700">BME680 module</text>'}
+        <text x="86" y="326" class="detail">BME680 · Temp / RH / Gas · every 30s</text>
+        <circle cx="86" cy="342" r="4.5" fill="{sensor_color}"/><text x="98" y="346" class="status" fill="{sensor_color}">{sensor_status}</text>
+      </g>
+      <g>
+        <rect x="80" y="429" width="300" height="215" rx="16" fill="#1c2d3f" stroke="#405a70" stroke-width="1.5"/>
+        {f'<image href="{esp}" x="180" y="440" width="100" height="143" preserveAspectRatio="xMidYMid meet"/>' if esp else '<text x="230" y="510" text-anchor="middle" fill="#e8f1fa" font-size="22" font-weight="700">ESP32</text>'}
+        <text x="230" y="605" text-anchor="middle" class="name">ESP32 MCU</text>
+        <text x="230" y="624" text-anchor="middle" class="detail">Packets sensor readings over Wi-Fi</text>
+      </g>
+      {''.join(route_groups[0])}
+      {''.join(route_groups[1])}
+
+      <!-- Edge layer: Raspberry Pi gateway -->
+      <g>
+        <rect x="525" y="240" width="300" height="300" rx="18" fill="#1a3938" stroke="#4b8b79" stroke-width="2"/>
+        <rect x="550" y="265" width="250" height="154" rx="9" fill="#e9edef"/>
+        {f'<image href="{pi}" x="550" y="265" width="250" height="154" preserveAspectRatio="xMidYMid meet"/>' if pi else '<text x="675" y="350" text-anchor="middle" fill="#183044" font-size="17" font-weight="700">Raspberry Pi</text>'}
+        <text x="675" y="456" text-anchor="middle" class="name">RASPBERRY PI GATEWAY</text>
+        <text x="675" y="481" text-anchor="middle" class="detail">Validates sensor packets</text>
+        <text x="675" y="500" text-anchor="middle" class="detail">Aggregates ten readings into 5-min summaries</text>
+        <circle cx="555" cy="522" r="5" fill="{quality_color}"/><text x="570" y="526" class="status" fill="{quality_color}">{quality}</text>
+      </g>
+
+      <!-- Simulated Internet boundary between edge and local SQLite -->
+      <g>
+        <circle cx="903" cy="395" r="23" fill="#1d3045" stroke="#58a6ff" stroke-width="2"/>
+        <path d="M882 395h42M903 374c-10 12-10 30 0 42M903 374c10 12 10 30 0 42M887 386h32M887 404h32" fill="none" stroke="#8ccaff" stroke-width="1.8"/>
+        <text x="903" y="433" text-anchor="middle" class="wire-label">SIM INTERNET</text>
+      </g>
+      {''.join(route_groups[2])}{''.join(route_groups[3])}
+
+      <!-- Cloud & UI layer: local SQLite plus separate hotel dashboard -->
+      <g>
+        <rect x="1000" y="220" width="320" height="275" rx="16" fill="#1c2d3f" stroke="#405a70" stroke-width="1.5"/>
+        <text x="1020" y="253" class="name">LOCAL CLOUD STORE</text>
+        <text x="1020" y="275" class="detail">SQLite database · shared by both apps</text>
+        <ellipse cx="1160" cy="344" rx="68" ry="22" fill="#29465d" stroke="#7dc8ff" stroke-width="2.5"/>
+        <path d="M1092 344v73c0 12 30 22 68 22s68-10 68-22v-73" fill="#20374a" stroke="#7dc8ff" stroke-width="2.5"/>
+        <path d="M1092 380c0 12 30 22 68 22s68-10 68-22M1092 417c0 12 30 22 68 22s68-10 68-22" fill="none" stroke="#7dc8ff" stroke-width="2"/>
+        <text x="1160" y="383" text-anchor="middle" fill="#d4edff" font-size="14" font-weight="700">SQLite</text>
+        <circle cx="1025" cy="475" r="5" fill="#39d8a0"/><text x="1040" y="479" class="status" fill="#39d8a0">{escape(cloud_status)}</text>
+      </g>
+      <g>
+        <rect x="1000" y="520" width="320" height="137" rx="16" fill="#3a2a31" stroke="#75494b" stroke-width="1.5"/>
+        <rect x="1020" y="545" width="54" height="40" rx="5" fill="#17283a" stroke="#7dc8ff" stroke-width="2"/>
+        <path d="M1028 554h14v8h23v12h-37M1035 593h25M1047 585v8" fill="none" stroke="#7dc8ff" stroke-width="2"/>
+        <text x="1085" y="560" class="name">HOTEL DASHBOARD</text>
+        <text x="1085" y="582" class="detail">Displays trends and risk predictions</text>
+        <text x="1085" y="601" class="detail">ML inference runs in the dashboard app</text>
+        <circle cx="1025" cy="636" r="5" fill="#39d8a0"/><text x="1040" y="640" class="status" fill="#39d8a0">READY</text>
+      </g>
+      {''.join(route_groups[4])}
+
+      <!-- Legend and simulation state -->
+      <rect x="35" y="706" width="1330" height="34" rx="9" fill="#17283a" stroke="#30475e"/>
+      <text x="55" y="728" class="detail">SOLID: SENSOR / GPIO</text>
+      <text x="255" y="728" class="detail">DASHED: SIMULATED NETWORK</text>
+      <text x="525" y="728" class="detail">QUEUE <tspan fill="#f2c56f" font-weight="700">{queued}</tspan></text>
+      <text x="685" y="728" class="detail">SIMULATION TIME <tspan fill="#eaf2f8" font-weight="700">{escape(str(clock))}</tspan></text>
+      <text x="1010" y="728" class="detail">NO PHYSICAL OR HOSTED CLOUD</text>
+    </svg></div></body></html>'''

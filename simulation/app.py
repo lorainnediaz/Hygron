@@ -187,7 +187,7 @@ components.html(render_board(
     stage=s.phase, sensor_online=s.node.online, internet_online=s.internet.online,
     latest_summary=s.latest_summary, cloud_count=s.cloud.status()['stored_summaries'],
     queue_count=len(s.bridge.pending), clock=s.clock.strftime('%H:%M')),
-    height=440, scrolling=False)
+    height=790, scrolling=False)
 
 m1,m2,m3,m4 = st.columns(4)
 m1.metric('Sensor / ESP32', 'Online' if s.node.online else 'Offline')
