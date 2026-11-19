@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { motion } from 'motion/react'
+import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import {
   AlertTriangle,
   CheckCircle2,
   CircleMinus,
   Gauge,
   RefreshCw,
-  Thermometer,
-  Droplets,
   LayoutDashboard,
   Info,
   Cpu,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react'
 import {
   LineChart,
@@ -67,58 +69,35 @@ function MetricCard({ label, value, caption, tone }) {
 
 function App() {
   const [page, setPage] = useState('Dashboard')
-  const [roomList, setRoomList] = useState([])
-  const [counts, setCounts] = useState({})
   const [selectedRoom, setSelectedRoom] = useState('room_101')
-  const [history, setHistory] = useState([])
   const [hours, setHours] = useState(24)
-  const [alerts, setAlerts] = useState([])
-  const [systemStatus, setSystemStatus] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [refreshKey, setRefreshKey] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const queryClient = useQueryClient()
 
-  async function loadDashboard() {
-    setLoading(true)
-    setError('')
-    try {
-      const [roomsBody, alertsBody, statusBody] = await Promise.all([
-        fetchJson('/rooms'),
-        fetchJson('/alerts'),
-        fetchJson('/system-status'),
-      ])
-      setRoomList(roomsBody.rooms)
-      setCounts(roomsBody.counts)
-      setAlerts(alertsBody.alerts)
-      setSystemStatus(statusBody)
-      if (roomsBody.rooms.length && !roomsBody.rooms.some((room) => room.room_id === selectedRoom)) {
-        setSelectedRoom(roomsBody.rooms[0].room_id)
-      }
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const roomsQuery = useQuery({
+    queryKey: ['rooms'],
+    queryFn: () => fetchJson('/rooms'),
+  })
+  const alertsQuery = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => fetchJson('/alerts'),
+  })
+  const systemQuery = useQuery({
+    queryKey: ['system-status'],
+    queryFn: () => fetchJson('/system-status'),
+  })
+  const historyQuery = useQuery({
+    queryKey: ['history', selectedRoom, hours],
+    queryFn: () => fetchJson(`/rooms/${selectedRoom}/history?hours=${hours}`),
+  })
 
-  useEffect(() => {
-    loadDashboard()
-  }, [refreshKey])
-
-  useEffect(() => {
-    let active = true
-    fetchJson(`/rooms/${selectedRoom}/history?hours=${hours}`)
-      .then((body) => {
-        if (active) setHistory(body.readings)
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError.message)
-      })
-    return () => {
-      active = false
-    }
-  }, [selectedRoom, hours, refreshKey])
+  const roomList = useMemo(() => roomsQuery.data?.rooms || [], [roomsQuery.data])
+  const counts = roomsQuery.data?.counts || {}
+  const alerts = alertsQuery.data?.alerts || []
+  const systemStatus = systemQuery.data
+  const history = historyQuery.data?.readings || []
+  const loading = roomsQuery.isLoading || alertsQuery.isLoading || systemQuery.isLoading
+  const error = roomsQuery.error?.message || alertsQuery.error?.message || systemQuery.error?.message || historyQuery.error?.message || ''
 
   const selected = useMemo(
     () => roomList.find((room) => room.room_id === selectedRoom),
@@ -126,12 +105,31 @@ function App() {
   )
   const priority = roomList[0]
 
-  async function acknowledgeAlert(alertId) {
-    await fetchJson(`/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'POST' })
-      .then(async () => setAlerts((current) => current.map((alert) =>
-        alert.id === alertId ? { ...alert, status: 'Acknowledged' } : alert,
-      )))
-      .catch((requestError) => setError(requestError.message))
+  const acknowledgeMutation = useMutation({
+    mutationFn: (alertId) =>
+      fetchJson(`/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'POST' }),
+    onSuccess: () => {
+      toast.success('Alert acknowledged', {
+        description: 'Acknowledgment records review. It does not confirm that risk is resolved.',
+      })
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    },
+    onError: (requestError) => {
+      toast.error('Could not acknowledge alert', { description: requestError.message })
+    },
+  })
+
+  function refreshDashboard() {
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['rooms'] }),
+      queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+      queryClient.invalidateQueries({ queryKey: ['system-status'] }),
+      queryClient.invalidateQueries({ queryKey: ['history', selectedRoom, hours] }),
+    ]).then(() => {
+      toast.success('Readings refreshed', {
+        description: 'The latest shared SQLite summaries are being displayed.',
+      })
+    })
   }
 
   return (
@@ -144,10 +142,10 @@ function App() {
           aria-label="Expand sidebar"
           title="Expand sidebar"
         >
-          <PanelLeftOpen size={18} aria-hidden="true" />
+          <ChevronsRight size={17} aria-hidden="true" />
         </button>
       )}
-      <aside className="sidebar" aria-label="Main navigation">
+      {!sidebarCollapsed && <aside className="sidebar" aria-label="Main navigation">
         <button
           type="button"
           className="sidebar-toggle"
@@ -156,11 +154,10 @@ function App() {
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed
-            ? <PanelLeftOpen size={18} aria-hidden="true" />
-            : <PanelLeftClose size={18} aria-hidden="true" />}
+            ? <ChevronsRight size={17} aria-hidden="true" />
+            : <ChevronsLeft size={17} aria-hidden="true" />}
         </button>
         <div className="brand">
-          <div className="brand-mark">H</div>
           <div>
             <strong>HYGRON</strong>
             <span>Environmental monitoring</span>
@@ -188,7 +185,7 @@ function App() {
           <span>Prototype</span>
           <small>Simulated data</small>
         </div>
-      </aside>
+      </aside>}
 
       <main className="main">
         {page !== 'Dashboard' ? (
@@ -204,12 +201,16 @@ function App() {
                 </a>
               </>
             ) : (
-              <>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+              >
                 <h2>Software-in-the-Loop architecture</h2>
                 <p>Virtual BME680 → virtual ESP32 → Raspberry Pi gateway → simulated Internet → SQLite → FastAPI → React dashboard.</p>
                 <h2>Model limitation</h2>
                 <p>Hygron estimates simulated VTT-derived mold-growth risk. It does not detect or confirm physical mold.</p>
-              </>
+              </motion.div>
             )}
           </section>
         ) : (
@@ -219,14 +220,25 @@ function App() {
                 <p className="eyebrow">Hotel monitoring</p>
                 <h1>Room overview</h1>
               </div>
-              <button
-                type="button"
-                className="refresh-button"
-                onClick={() => setRefreshKey((value) => value + 1)}
-              >
-                <RefreshCw size={17} aria-hidden="true" />
-                Refresh readings
-              </button>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={refreshDashboard}
+                    disabled={roomsQuery.isFetching}
+                  >
+                    <RefreshCw className="refresh-icon" size={17} aria-hidden="true" />
+                    {roomsQuery.isFetching ? 'Refreshing…' : 'Refresh readings'}
+                  </button>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content className="tooltip-content" sideOffset={8}>
+                    Re-read the latest shared SQLite summaries
+                    <TooltipPrimitive.Arrow className="tooltip-arrow" />
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
             </header>
 
             {error && (
@@ -392,8 +404,8 @@ function App() {
                       </div>
                       <button
                         type="button"
-                        disabled={alert.status === 'Acknowledged'}
-                        onClick={() => acknowledgeAlert(alert.id)}
+                        disabled={alert.status === 'Acknowledged' || acknowledgeMutation.isPending}
+                        onClick={() => acknowledgeMutation.mutate(alert.id)}
                       >
                         {alert.status === 'Acknowledged' ? 'Acknowledged' : 'Acknowledge'}
                       </button>
