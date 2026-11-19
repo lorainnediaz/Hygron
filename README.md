@@ -1,5 +1,49 @@
 # Hygron — Virtual IoT Mold-Risk Monitoring Prototype
 
+## React + FastAPI migration
+
+The repository now includes an optional React HCI frontend backed by FastAPI:
+
+```text
+React (Vite)
+  -> FastAPI REST API
+  -> SQLite + existing ML bridge/inference
+
+Existing Streamlit IoT Workbench
+  -> Virtual sensor/ESP32/gateway/network pipeline
+  -> Same SQLite database
+```
+
+The existing trained Random Forest models and IoT simulator remain unchanged. React does not reproduce feature engineering or model inference.
+
+### React and FastAPI run commands
+
+Terminal 1 — FastAPI:
+
+```powershell
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Terminal 2 — React:
+
+```powershell
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Open:
+- React: <http://127.0.0.1:5173>
+- FastAPI docs: <http://127.0.0.1:8000/docs>
+
+The existing unified Streamlit application remains available and can be run separately:
+
+```powershell
+python -m streamlit run app.py --server.port 8501
+```
+
+The React dashboard and Streamlit Workbench use the same `data/hygron_demo.sqlite3` database. Start the workbench in Streamlit to generate additional readings, then refresh the React dashboard.
+
 **Hygron** is a software-in-the-loop (SIL) prototype for monitoring environmental conditions in simulated hotel guest rooms. It combines a virtual IoT sensor-to-cloud pipeline, trained machine learning models for **current mold-growth risk** and a **24-hour risk category forecast**, and a hotel-staff-facing dashboard.
 
 > **Prototype disclaimer:** All sensor data, ESP32/Raspberry Pi devices, network connections and cloud behavior are **simulated**. The cloud is represented by a **local SQLite database**, not a hosted cloud service. The models estimate conditions associated with mold growth; they **do not detect or confirm mold**. The models were trained on synthetic data with VTT-derived risk labels.
@@ -141,6 +185,7 @@ Both apps must see the same SQLite file. If needed, set the identical absolute `
 
 ```powershell
 python -m unittest test_integration.py -v
+python -m unittest test_api.py -v
 ```
 
 The integration tests cover representative data flow, SQLite handoff and network/bulk behaviors; they do not validate real sensor accuracy, actual network reliability, or deployment readiness.

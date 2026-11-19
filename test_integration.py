@@ -1,23 +1,12 @@
 """Offline checks: run `python -m unittest test_integration.py -v`."""
-import ast
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import math, random
-import pandas as pd
 from sensor_simulator import VirtualESP32
 from edge_gateway import EdgeGateway
 from network_cloud import VirtualCloud, SimulatedInternet, EdgeToCloudBridge
 from ml_bridge import latest_features, HISTORY_ROWS
-
-# Load just the pure history generator; do not import the Streamlit page.
-app_source = (Path(__file__).parent / 'dashboard' / 'app.py').read_text()
-parsed = ast.parse(app_source)
-warm_ast = next(node for node in parsed.body if isinstance(node, ast.FunctionDef) and node.name == 'warm_history')
-module = ast.fix_missing_locations(ast.Module(body=[warm_ast], type_ignores=[]))
-ns = {'datetime':datetime,'timedelta':timedelta,'random':random,'math':math,'HISTORY_ROWS':HISTORY_ROWS}
-exec(compile(module, '<history>', 'exec'), ns)
-warm_history = ns['warm_history']
+from warm_history import warm_history
 
 class IntegrationTests(unittest.TestCase):
     def test_warm_history_feature_contract(self):
@@ -60,7 +49,7 @@ class SharedStorageTests(unittest.TestCase):
         import shared_store
         old=shared_store.DB_PATH
         try:
-            with tempfile.TemporaryDirectory() as tmp:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 shared_store.DB_PATH=Path(tmp)/'test.sqlite3'
                 cloud=shared_store.SQLiteCloud()
                 packet={'room_id':'room_101','node_id':'esp32_room_101',
@@ -80,7 +69,7 @@ class SharedStorageTests(unittest.TestCase):
         import shared_store
         old=shared_store.DB_PATH
         try:
-            with tempfile.TemporaryDirectory() as tmp:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 shared_store.DB_PATH=Path(tmp)/'test.sqlite3'
                 cloud=shared_store.SQLiteCloud()
                 internet=SimulatedInternet(online=False)
@@ -103,7 +92,7 @@ class RoomSelectionBulkTests(unittest.TestCase):
         from simulation.bulk_engine import generate_bulk
         old = shared_store.DB_PATH
         try:
-            with tempfile.TemporaryDirectory() as tmp:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 shared_store.DB_PATH = Path(tmp) / 'bulk_test.sqlite3'
                 cloud = shared_store.SQLiteCloud()
                 bridge = EdgeToCloudBridge(SimulatedInternet(), cloud)
