@@ -38,6 +38,7 @@ class HygronApiTests(unittest.TestCase):
         forecast = self.client.get("/api/rooms/room_101/forecast")
         self.assertEqual(forecast.status_code, 200)
         self.assertEqual(forecast.json()["horizon_hours"], 24)
+        self.assertEqual(forecast.json()["confidence"], "Unavailable")
 
     def test_invalid_room(self):
         response = self.client.get("/api/rooms/room_999/risk")
@@ -54,6 +55,19 @@ class HygronApiTests(unittest.TestCase):
         response = self.client.get("/api/alerts")
         self.assertEqual(response.status_code, 200)
         self.assertIn("alerts", response.json())
+
+    def test_alert_acknowledgment_persists_in_sqlite(self):
+        alerts = self.client.get("/api/alerts").json()["alerts"]
+        if not alerts:
+            self.skipTest("No active High-risk alerts")
+        alert_id = alerts[0]["id"]
+        acknowledged = self.client.post(f"/api/alerts/{alert_id}/acknowledge")
+        self.assertEqual(acknowledged.status_code, 200)
+        self.assertEqual(acknowledged.json()["status"], "Acknowledged")
+        persisted = self.client.get("/api/alerts").json()["alerts"]
+        matching = next((alert for alert in persisted if alert["id"] == alert_id), None)
+        self.assertIsNotNone(matching)
+        self.assertEqual(matching["status"], "Acknowledged")
 
     def test_insufficient_history_is_unavailable(self):
         with sqlite3.connect(f"{self.tmp.name}/api.sqlite3") as db:

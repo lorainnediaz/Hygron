@@ -57,8 +57,6 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         app.state.models = None
         app.state.model_error = f"{type(exc).__name__}: {exc}"
 
-    app.state.acknowledged_alerts = set()
-
     def valid_room(room_id: str) -> None:
         if room_id not in ROOMS:
             raise HTTPException(status_code=404, detail="Unknown room identifier")
@@ -194,6 +192,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "model_available": status["model_available"],
             "error": status.get("error"),
             "is_simulated": True,
+            "confidence": "Unavailable",
             "disclaimer": "Supplementary simulated risk category; not a guaranteed or hourly warning.",
         }
 
@@ -215,18 +214,18 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
                 "rh": status["rh"],
                 "temp": status["temp"],
                 "timestamp": stamp,
-                "status": "Acknowledged" if alert_id in app.state.acknowledged_alerts else "Action needed",
+                "status": "Acknowledged" if app.state.cloud.is_alert_acknowledged(alert_id) else "Action needed",
                 "is_simulated": True,
             })
         return {"alerts": items, "acknowledgments_are_resolution": False}
 
     @app.post("/api/alerts/{alert_id}/acknowledge")
     def acknowledge_alert(alert_id: str) -> dict:
-        app.state.acknowledged_alerts.add(alert_id)
+        app.state.cloud.acknowledge_alert(alert_id)
         return {
             "id": alert_id,
             "status": "Acknowledged",
-            "message": "Acknowledged for this API session; this does not confirm risk resolution.",
+            "message": "Acknowledged and stored in SQLite; this does not confirm risk resolution.",
         }
 
     @app.get("/api/system-status")

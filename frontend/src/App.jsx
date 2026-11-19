@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
+import * as SelectPrimitive from '@radix-ui/react-select'
+import { Check, ChevronDown } from 'lucide-react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -67,11 +69,12 @@ function MetricCard({ label, value, caption, tone }) {
   )
 }
 
-function App() {
+export function App() {
   const [page, setPage] = useState('Dashboard')
   const [selectedRoom, setSelectedRoom] = useState('room_101')
   const [hours, setHours] = useState(24)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [sidebarClosing, setSidebarClosing] = useState(false)
   const queryClient = useQueryClient()
 
   const roomsQuery = useQuery({
@@ -90,12 +93,17 @@ function App() {
     queryKey: ['history', selectedRoom, hours],
     queryFn: () => fetchJson(`/rooms/${selectedRoom}/history?hours=${hours}`),
   })
+  const forecastQuery = useQuery({
+    queryKey: ['forecast', selectedRoom],
+    queryFn: () => fetchJson(`/rooms/${selectedRoom}/forecast`),
+  })
 
   const roomList = useMemo(() => roomsQuery.data?.rooms || [], [roomsQuery.data])
   const counts = roomsQuery.data?.counts || {}
   const alerts = alertsQuery.data?.alerts || []
   const systemStatus = systemQuery.data
   const history = historyQuery.data?.readings || []
+  const forecast = forecastQuery.data
   const chartStats = useMemo(() => {
     const history = historyQuery.data?.readings || []
     if (!history.length) return null
@@ -116,6 +124,14 @@ function App() {
     [roomList, selectedRoom],
   )
   const priority = roomList[0]
+  const forecastDirection = useMemo(() => {
+    if (!forecast?.current_risk || !forecast?.forecast_24h_risk) return 'Unknown'
+    const rank = { Low: 0, Medium: 1, High: 2 }
+    if (!(forecast.current_risk in rank) || !(forecast.forecast_24h_risk in rank)) return 'Unknown'
+    if (rank[forecast.forecast_24h_risk] > rank[forecast.current_risk]) return 'Higher'
+    if (rank[forecast.forecast_24h_risk] < rank[forecast.current_risk]) return 'Lower'
+    return 'Unchanged'
+  }, [forecast])
 
   const acknowledgeMutation = useMutation({
     mutationFn: (alertId) =>
@@ -137,6 +153,7 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['alerts'] }),
       queryClient.invalidateQueries({ queryKey: ['system-status'] }),
       queryClient.invalidateQueries({ queryKey: ['history', selectedRoom, hours] }),
+      queryClient.invalidateQueries({ queryKey: ['forecast', selectedRoom] }),
     ]).then(() => {
       toast.success('Readings refreshed', {
         description: 'The latest shared SQLite summaries are being displayed.',
@@ -144,30 +161,55 @@ function App() {
     })
   }
 
+  function openSidebar() {
+    setSidebarClosing(false)
+    setSidebarCollapsed(false)
+  }
+
+  function closeSidebar() {
+    if (sidebarClosing) return
+    setSidebarClosing(true)
+  }
+
   return (
     <div className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
+      <a className="skip-link" href="#main-content">Skip to dashboard content</a>
       {sidebarCollapsed && (
         <button
           type="button"
           className="floating-sidebar-toggle"
-          onClick={() => setSidebarCollapsed(false)}
+          onClick={openSidebar}
           aria-label="Expand sidebar"
           title="Expand sidebar"
         >
           <ChevronsRight size={17} aria-hidden="true" />
         </button>
       )}
-      {!sidebarCollapsed && <aside className="sidebar" aria-label="Main navigation">
+      <AnimatePresence initial={false}>
+        {(!sidebarCollapsed || sidebarClosing) && (
+          <motion.aside
+            key="sidebar"
+            className="sidebar"
+            aria-label="Main navigation"
+            initial={sidebarClosing ? false : { x: -248, opacity: 0 }}
+            animate={{ x: sidebarClosing ? -248 : 0, opacity: sidebarClosing ? 0 : 1 }}
+            exit={{ x: -248, opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+            onAnimationComplete={() => {
+              if (sidebarClosing) {
+                setSidebarCollapsed(true)
+                setSidebarClosing(false)
+              }
+            }}
+          >
         <button
           type="button"
           className="sidebar-toggle"
-          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={closeSidebar}
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
         >
-          {sidebarCollapsed
-            ? <ChevronsRight size={17} aria-hidden="true" />
-            : <ChevronsLeft size={17} aria-hidden="true" />}
+          <ChevronsLeft size={17} aria-hidden="true" />
         </button>
         <div className="brand">
           <div>
@@ -197,9 +239,11 @@ function App() {
           <span>Prototype</span>
           <small>Simulated data</small>
         </div>
-      </aside>}
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
-      <main className="main">
+      <main className="main" id="main-content">
         {page !== 'Dashboard' ? (
           <section className="content-card placeholder-page">
             <h1>{page}</h1>
@@ -321,13 +365,15 @@ function App() {
                         role="row"
                         className={selectedRoom === room.room_id ? 'room-row selected' : 'room-row'}
                         key={room.room_id}
+                        aria-pressed={selectedRoom === room.room_id}
+                        aria-label={`Select ${room.room_name}, ${room.current_risk} risk`}
                         onClick={() => setSelectedRoom(room.room_id)}
                       >
-                        <strong>{room.room_name}</strong>
-                        <RiskBadge risk={room.current_risk} />
-                        <span>{room.rh != null ? `${Number(room.rh).toFixed(1)}%` : 'Unavailable'}</span>
-                        <span>{room.temp != null ? `${Number(room.temp).toFixed(1)} °C` : 'Unavailable'}</span>
-                        <span>{room.current_risk === 'High' ? 'Inspect' : room.current_risk === 'Medium' ? 'Monitor' : room.current_risk === 'Low' ? 'Continue' : 'Review data'}</span>
+                        <strong className="room-cell room-name" data-label="Room">{room.room_name}</strong>
+                        <span className="room-cell room-risk" data-label="Estimated risk"><RiskBadge risk={room.current_risk} /></span>
+                        <span className="room-cell" data-label="Humidity">{room.rh != null ? `${Number(room.rh).toFixed(1)}%` : 'Unavailable'}</span>
+                        <span className="room-cell" data-label="Temperature">{room.temp != null ? `${Number(room.temp).toFixed(1)} °C` : 'Unavailable'}</span>
+                        <span className="room-cell" data-label="Staff action">{room.current_risk === 'High' ? 'Inspect' : room.current_risk === 'Medium' ? 'Monitor' : room.current_risk === 'Low' ? 'Continue' : 'Review data'}</span>
                       </button>
                     ))}
                   </div>
@@ -347,7 +393,11 @@ function App() {
                         label="TEMPERATURE"
                         value={selected.temp != null ? `${Number(selected.temp).toFixed(1)} °C` : 'Unavailable'}
                       />
-                      <MetricCard label="24-HOUR OUTLOOK" value={selected.forecast_24h_risk} />
+                      <MetricCard
+                        label="24-HOUR OUTLOOK"
+                        value={forecast?.forecast_24h_risk || selected.forecast_24h_risk || 'Unavailable'}
+                        tone={(forecast?.forecast_24h_risk || selected.forecast_24h_risk || 'unavailable').toLowerCase()}
+                      />
                     </div>
                     <p className="disclaimer">
                       Latest simulated reading: {selected.latest_timestamp || 'Unavailable'}.
@@ -375,12 +425,33 @@ function App() {
                 <section>
                   <div className="section-heading">
                     <h2 className="section-title">Humidity history</h2>
-                    <select value={hours} onChange={(event) => setHours(Number(event.target.value))} aria-label="Time period">
-                      <option value={24}>24 hours</option>
-                      <option value={168}>7 days</option>
-                      <option value={720}>30 days</option>
-                      <option value={1440}>60 days</option>
-                    </select>
+                    <SelectPrimitive.Root value={String(hours)} onValueChange={(value) => setHours(Number(value))}>
+                      <SelectPrimitive.Trigger className="period-select-trigger" aria-label="Time period">
+                        <SelectPrimitive.Value />
+                        <SelectPrimitive.Icon>
+                          <ChevronDown size={15} aria-hidden="true" />
+                        </SelectPrimitive.Icon>
+                      </SelectPrimitive.Trigger>
+                      <SelectPrimitive.Portal>
+                        <SelectPrimitive.Content className="period-select-content" position="popper" sideOffset={6}>
+                          <SelectPrimitive.Viewport>
+                            {[
+                              ['24', '24 hours'],
+                              ['168', '7 days'],
+                              ['720', '30 days'],
+                              ['1440', '60 days'],
+                            ].map(([value, label]) => (
+                              <SelectPrimitive.Item className="period-select-item" value={value} key={value}>
+                                <SelectPrimitive.ItemText>{label}</SelectPrimitive.ItemText>
+                                <SelectPrimitive.ItemIndicator className="period-select-indicator">
+                                  <Check size={15} aria-hidden="true" />
+                                </SelectPrimitive.ItemIndicator>
+                              </SelectPrimitive.Item>
+                            ))}
+                          </SelectPrimitive.Viewport>
+                        </SelectPrimitive.Content>
+                      </SelectPrimitive.Portal>
+                    </SelectPrimitive.Root>
                   </div>
                   <div className="chart-card">
                     {history.length ? (
@@ -392,6 +463,12 @@ function App() {
                             <div><span>At or above 80%</span><strong>{chartStats.atThreshold}%</strong></div>
                           </div>
                         )}
+                        <div className="chart-legend" aria-label="Chart legend">
+                          <span><i className="legend-rh" aria-hidden="true" /> Relative humidity</span>
+                          <span><i className="legend-temp" aria-hidden="true" /> Temperature</span>
+                          <span><i className="legend-threshold" aria-hidden="true" /> 80% RH reference</span>
+                        </div>
+                        <div className="chart-visual" role="img" aria-label={`Humidity and temperature chart for ${selected.room_name}`}>
                         <ResponsiveContainer width="100%" height={280}>
                         <LineChart data={history}>
                           <CartesianGrid stroke="rgba(128,128,128,.18)" vertical={false} />
@@ -433,6 +510,18 @@ function App() {
                           />
                         </LineChart>
                         </ResponsiveContainer>
+                        </div>
+                        {chartStats && (
+                          <details className="chart-text-alternative">
+                            <summary>Chart text alternative</summary>
+                            <p>
+                              For {selected.room_name}, {history.length} displayed simulated readings are shown.
+                              {' '}Relative humidity ranges from {chartStats.minimum.toFixed(1)}% to {chartStats.maximum.toFixed(1)}%;
+                              {' '}the latest reading is {chartStats.latest.toFixed(1)}%, and {chartStats.atThreshold}% of displayed readings
+                              are at or above 80% RH.
+                            </p>
+                          </details>
+                        )}
                       </>
                     ) : (
                       <div className="empty-state">No valid cloud readings for this room.</div>
@@ -440,21 +529,83 @@ function App() {
                   </div>
                 </section>
 
+                {selected && (
+                  <section className="outlook-section" aria-labelledby="outlook-title">
+                    <div className="section-heading">
+                      <h2 className="section-title" id="outlook-title">24-hour estimated outlook</h2>
+                      <span className={`outlook-direction direction-${forecastDirection.toLowerCase()}`}>
+                        Direction: {forecastDirection}
+                      </span>
+                    </div>
+                    <div className="outlook-card">
+                      <div className="outlook-progress" aria-label={`${selected.current_risk} to ${forecast?.forecast_24h_risk || 'Unavailable'} in 24 hours`}>
+                        <div>
+                          <span>Current estimate</span>
+                          <strong className={`outlook-risk risk-${selected.current_risk.toLowerCase()}`}>{selected.current_risk}</strong>
+                        </div>
+                        <span className="outlook-arrow" aria-hidden="true">→</span>
+                        <div>
+                          <span>In 24 hours</span>
+                          <strong className={`outlook-risk risk-${(forecast?.forecast_24h_risk || 'Unavailable').toLowerCase()}`}>
+                            {forecast?.forecast_24h_risk || 'Unavailable'}
+                          </strong>
+                        </div>
+                      </div>
+                      <p>
+                        Relative to the latest simulated reading
+                        {selected.latest_timestamp ? ` (${selected.latest_timestamp})` : ''}.
+                        This is supplementary decision support, not a guaranteed warning.
+                      </p>
+                      <p className="forecast-confidence">Forecast confidence: <strong>Unavailable</strong></p>
+                      <details className="outlook-limitations">
+                        <summary>Forecast limitations</summary>
+                        <p>
+                          This is one predicted category at +24 hours, not an hourly curve.
+                          The model is trained on simulated VTT-derived labels and may not predict real-world mold conditions.
+                          No calibrated confidence estimate is available; staff should confirm conditions before acting.
+                        </p>
+                      </details>
+                    </div>
+                  </section>
+                )}
+
                 <section>
                   <h2 className="section-title">Alerts</h2>
-                  {alerts.length ? alerts.map((alert) => (
-                    <article className="alert-card" key={alert.id}>
-                      <div>
-                        <strong>{alert.room_name} needs attention</strong>
-                        <p>{alert.rh != null ? `Humidity: ${Number(alert.rh).toFixed(1)}%` : 'Humidity unavailable'} · {alert.timestamp}</p>
-                        <p>Inspect for moisture, condensation, or ventilation issues.</p>
+                  <div className="alert-list-summary">
+                    <p>
+                      <strong>{alerts.filter((alert) => alert.status !== 'Acknowledged').length} active</strong>
+                      <span> · {alerts.length} current alert{alerts.length === 1 ? '' : 's'} in this session</span>
+                    </p>
+                    <span>Acknowledgment records review; it does not confirm resolution.</span>
+                  </div>
+                  {alerts.length ? alerts.slice(0, 5).map((alert) => (
+                    <article className={`alert-card ${alert.status === 'Acknowledged' ? 'acknowledged' : ''}`} key={alert.id}>
+                      <div className="alert-main">
+                        <span className="alert-status-icon" aria-hidden="true">
+                          {alert.status === 'Acknowledged'
+                            ? <CheckCircle2 size={18} />
+                            : <AlertTriangle size={18} />}
+                        </span>
+                        <div>
+                          <div className="alert-heading">
+                            <strong>{alert.room_name} needs attention</strong>
+                            <span className={`alert-state ${alert.status === 'Acknowledged' ? 'is-acknowledged' : 'needs-action'}`}>
+                              {alert.status === 'Acknowledged' ? 'Acknowledged' : 'Action needed'}
+                            </span>
+                          </div>
+                          <p>
+                            Humidity: {alert.rh != null ? `${Number(alert.rh).toFixed(1)}%` : 'Unavailable'}
+                            {' · '}Temperature: {alert.temp != null ? `${Number(alert.temp).toFixed(1)} °C` : 'Unavailable'}
+                          </p>
+                          <p className="alert-time">{alert.timestamp}</p>
+                        </div>
                       </div>
                       <button
                         type="button"
                         disabled={alert.status === 'Acknowledged' || acknowledgeMutation.isPending}
                         onClick={() => acknowledgeMutation.mutate(alert.id)}
                       >
-                        {alert.status === 'Acknowledged' ? 'Acknowledged' : 'Acknowledge'}
+                        {alert.status === 'Acknowledged' ? 'Reviewed' : 'Acknowledge'}
                       </button>
                     </article>
                   )) : (

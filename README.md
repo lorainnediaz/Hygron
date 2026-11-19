@@ -178,7 +178,7 @@ Both apps must see the same SQLite file. If needed, set the identical absolute `
 - **Training:** Simulated VTT-derived mold-growth categories, not real hotel mold inspections.
 - **Evaluation on an independent simulated 12-room batch:** Current-risk macro-F1 approximately **0.692**; 24-hour forecast macro-F1 approximately **0.652**. The forecast struggled to anticipate risk transitions and should not be treated as a dependable early warning.
 - **History requirement:** The UI seeds 60 days of synthetic readings for demonstration. No calibrated forecast confidence is provided.
-- **Alerts:** Acknowledgments/history are **local to the active Streamlit dashboard session**, not persistent multiuser notifications.
+- **Alerts:** React acknowledgments are persisted in local SQLite for the prototype. They are not multi-user notifications or confirmation that risk has been resolved.
 - **Network/cloud:** No real ESP32 hardware, Raspberry Pi, Internet transport or hosted backend is used in this build.
 
 ## Tests
@@ -189,6 +189,82 @@ python -m unittest test_api.py -v
 ```
 
 The integration tests cover representative data flow, SQLite handoff and network/bulk behaviors; they do not validate real sensor accuracy, actual network reliability, or deployment readiness.
+
+## Dashboard completion checklist
+
+- [x] React + Vite light-mode dashboard
+- [x] FastAPI REST integration
+- [x] Room risk table and room selection
+- [x] Priority room warning panel
+- [x] Latest-reading and system status
+- [x] Selected-room staff guidance
+- [x] Humidity history with 80% RH reference
+- [x] Chart summary: latest RH, range, and percentage at/above 80%
+- [x] Chart legend and text alternative
+- [x] 24-hour outlook with direction
+- [x] Forecast limitations and unavailable confidence label
+- [x] Active and acknowledged alert states
+- [x] SQLite-persisted alert acknowledgments
+- [x] Responsive sidebar and dashboard layouts
+- [x] Keyboard focus and reduced-motion styles
+- [x] API tests for rooms, history, forecast, alerts, and unavailable data
+- [x] Automated dashboard interaction tests
+- [x] Mobile room-card layout
+- [x] HCI task scenarios and heuristic evaluation template
+- [x] HCI scenario-based usability testing guide
+- [ ] Complete mobile-device usability testing with participants
+- [ ] Complete heuristic evaluation with participants
+- [ ] Complete scenario-based usability testing with participants
+- [ ] Alert history retention policy for deployment
+- [ ] Calibrated forecast confidence
+- [ ] Real hardware and hosted cloud integration
+
+## HCI scenario-based usability test
+
+Ask participants to complete these tasks without instructions beyond the task:
+
+1. Identify the room that needs attention first and explain the reason.
+2. Select another room and compare its humidity and temperature with the priority room.
+3. Change the humidity-history range to 7 days.
+4. Explain the 24-hour outlook and identify whether it predicts higher, lower, or unchanged risk.
+5. Open and acknowledge a High-risk alert.
+6. Explain what acknowledgment does and does not confirm.
+7. Collapse and reopen the sidebar.
+8. Repeat the main tasks using only a keyboard.
+
+Record completion time, success/failure, errors, hesitation, confidence, and whether the participant interpreted risk as confirmed mold.
+
+## HCI heuristic evaluation
+
+Evaluate the dashboard with Nielsen's 10 heuristics:
+
+| Heuristic | Review focus |
+|---|---|
+| Visibility of system status | Loading, refresh, acknowledgment, and data availability feedback |
+| Match between system and real world | Room staff language and environmental terminology |
+| User control and freedom | Sidebar, room selection, time range, and refresh |
+| Consistency and standards | Risk colors, labels, buttons, and navigation |
+| Error prevention | Unavailable data, acknowledgments, and invalid selections |
+| Recognition rather than recall | Room table, legends, and selected-room state |
+| Flexibility and efficiency | Fast room switching and responsive navigation |
+| Aesthetic and minimalist design | Clear hierarchy without decorative clutter |
+| Error diagnosis and recovery | Network, model, and missing-history messages |
+| Help and documentation | Forecast limitations, chart alternative, and methodology |
+
+For each finding record: screen, heuristic, severity from 0–4, evidence, and recommended fix.
+
+## Accessibility checklist
+
+- [x] Skip link to dashboard content
+- [x] Visible keyboard focus
+- [x] Sidebar open/close button labels
+- [x] Room selection labels and pressed state
+- [x] Chart legend and text alternative
+- [x] Select menu keyboard support
+- [x] Reduced-motion styles
+- [ ] Screen-reader pass with a complete workflow
+- [ ] Contrast pass for every risk and text state
+- [ ] Keyboard-only test for every primary task
 
 ## Reset local demo data
 

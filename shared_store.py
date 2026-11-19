@@ -20,6 +20,11 @@ def connect():
         complete INTEGER NOT NULL, source TEXT NOT NULL, payload TEXT NOT NULL,
         PRIMARY KEY(room_id,node_id,timestamp))''')
     db.execute('CREATE INDEX IF NOT EXISTS idx_history ON summaries(room_id, timestamp)')
+    db.execute('''CREATE TABLE IF NOT EXISTS alert_acknowledgments (
+        alert_id TEXT PRIMARY KEY,
+        acknowledged_at TEXT NOT NULL,
+        acknowledged INTEGER NOT NULL DEFAULT 1
+    )''')
     return db
 
 
@@ -69,6 +74,25 @@ class SQLiteCloud:
     def has_room(self, room_id):
         with connect() as db:
             return bool(db.execute('SELECT 1 FROM summaries WHERE room_id=? LIMIT 1',(room_id,)).fetchone())
+
+    def acknowledge_alert(self, alert_id):
+            with connect() as db:
+                db.execute(
+                    '''INSERT INTO alert_acknowledgments (alert_id, acknowledged_at, acknowledged)
+                       VALUES (?, ?, 1)
+                       ON CONFLICT(alert_id) DO UPDATE SET
+                       acknowledged=1,
+                       acknowledged_at=excluded.acknowledged_at''',
+                    (str(alert_id), datetime.now().astimezone().isoformat(timespec='seconds')),
+                )
+
+    def is_alert_acknowledged(self, alert_id):
+            with connect() as db:
+                row = db.execute(
+                    'SELECT acknowledged FROM alert_acknowledgments WHERE alert_id=?',
+                    (str(alert_id),),
+                ).fetchone()
+            return bool(row and row[0])
 
     def seed_room_if_empty(self, room_id, make_rows):
         """Seed once only, using a write lock to avoid two servers racing."""
