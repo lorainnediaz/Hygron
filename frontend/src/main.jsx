@@ -22,7 +22,7 @@ createRoot(document.getElementById('root')).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={250}>
         <App />
-        <Toaster theme="dark" position="top-right" richColors closeButton />
+        <Toaster theme="light" position="top-right" richColors closeButton />
       </TooltipProvider>
     </QueryClientProvider>
   </StrictMode>,

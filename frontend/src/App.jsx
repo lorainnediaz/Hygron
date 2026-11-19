@@ -31,10 +31,10 @@ import './App.css'
 const API = '/api'
 
 const riskStyles = {
-  High: { icon: AlertTriangle, color: '#ff453a', label: 'High — Inspect first' },
-  Medium: { icon: Gauge, color: '#ff9f0a', label: 'Medium — Monitor' },
-  Low: { icon: CheckCircle2, color: '#30d158', label: 'Low — Normal monitoring' },
-  Unavailable: { icon: CircleMinus, color: '#98989f', label: 'Unavailable — Check data' },
+  High: { icon: AlertTriangle, color: '#b84d45', label: 'High — Inspect first' },
+  Medium: { icon: Gauge, color: '#b77929', label: 'Medium — Monitor' },
+  Low: { icon: CheckCircle2, color: '#3e8067', label: 'Low — Normal monitoring' },
+  Unavailable: { icon: CircleMinus, color: '#91a098', label: 'Unavailable — Check data' },
 }
 
 async function fetchJson(path, options) {
@@ -96,6 +96,18 @@ function App() {
   const alerts = alertsQuery.data?.alerts || []
   const systemStatus = systemQuery.data
   const history = historyQuery.data?.readings || []
+  const chartStats = useMemo(() => {
+    const history = historyQuery.data?.readings || []
+    if (!history.length) return null
+    const values = history.map((reading) => Number(reading.rh)).filter(Number.isFinite)
+    if (!values.length) return null
+    return {
+      latest: values.at(-1),
+      minimum: Math.min(...values),
+      maximum: Math.max(...values),
+      atThreshold: Math.round((values.filter((value) => value >= 80).length / values.length) * 100),
+    }
+  }, [historyQuery.data])
   const loading = roomsQuery.isLoading || alertsQuery.isLoading || systemQuery.isLoading
   const error = roomsQuery.error?.message || alertsQuery.error?.message || systemQuery.error?.message || historyQuery.error?.message || ''
 
@@ -217,8 +229,10 @@ function App() {
           <>
             <header className="page-header">
               <div>
-                <p className="eyebrow">Hotel monitoring</p>
                 <h1>Room overview</h1>
+                {systemStatus?.latest_timestamp && (
+                  <p className="system-caption">Latest reading {systemStatus.latest_timestamp}</p>
+                )}
               </div>
               <TooltipPrimitive.Root>
                 <TooltipPrimitive.Trigger asChild>
@@ -253,13 +267,21 @@ function App() {
             ) : (
               <>
                 {priority && (
-                  <section className="priority-panel" aria-label="Recommended room">
+                  <section
+                    className={`priority-panel priority-${priority.current_risk.toLowerCase()}`}
+                    aria-label="Recommended room"
+                  >
+                    {priority.current_risk === 'High' && (
+                      <AlertTriangle className="priority-warning-icon" size={26} aria-hidden="true" />
+                    )}
                     <div className="priority-copy">
-                      <p>Room to check</p>
+                      <p>{priority.current_risk === 'High' ? 'Immediate attention required' : 'Room to check'}</p>
                       <h2>{priority.room_name}</h2>
                       <div className="priority-status">
                         <span className={`status-dot ${priority.current_risk.toLowerCase()}`} />
-                        {priority.current_risk} estimated risk
+                        {priority.current_risk === 'High'
+                          ? 'High estimated risk — inspect now'
+                          : `${priority.current_risk} estimated risk`}
                       </div>
                       <span className="priority-reading">
                         {priority.rh != null ? `${Number(priority.rh).toFixed(1)}% RH` : 'Humidity unavailable'}
@@ -267,7 +289,7 @@ function App() {
                       </span>
                     </div>
                     <button type="button" onClick={() => setSelectedRoom(priority.room_id)}>
-                      View room
+                      {priority.current_risk === 'High' ? 'Inspect room' : 'View room'}
                     </button>
                   </section>
                 )}
@@ -331,6 +353,22 @@ function App() {
                       Latest simulated reading: {selected.latest_timestamp || 'Unavailable'}.
                       Risk estimates describe simulated VTT-derived conditions, not confirmed mold.
                     </p>
+                    <div className={`room-guidance guidance-${selected.current_risk.toLowerCase()}`}>
+                      <strong>
+                        {selected.current_risk === 'High'
+                          ? 'Inspect for moisture or ventilation issues.'
+                          : selected.current_risk === 'Medium'
+                            ? 'Monitor the trend and plan a follow-up check.'
+                            : selected.current_risk === 'Low'
+                              ? 'Continue normal monitoring.'
+                              : 'Review data availability before making a risk decision.'}
+                      </strong>
+                      <span>
+                        {selected.current_risk === 'High'
+                          ? 'Check the room, inspect damp surfaces, and review the humidity trend.'
+                          : 'Risk estimates do not confirm that physical mold is present.'}
+                      </span>
+                    </div>
                   </section>
                 )}
 
@@ -346,21 +384,29 @@ function App() {
                   </div>
                   <div className="chart-card">
                     {history.length ? (
-                      <ResponsiveContainer width="100%" height={280}>
+                      <>
+                        {chartStats && (
+                          <div className="chart-summary" aria-label="Humidity chart summary">
+                            <div><span>Latest RH</span><strong>{chartStats.latest.toFixed(1)}%</strong></div>
+                            <div><span>Humidity range</span><strong>{chartStats.minimum.toFixed(1)}–{chartStats.maximum.toFixed(1)}%</strong></div>
+                            <div><span>At or above 80%</span><strong>{chartStats.atThreshold}%</strong></div>
+                          </div>
+                        )}
+                        <ResponsiveContainer width="100%" height={280}>
                         <LineChart data={history}>
                           <CartesianGrid stroke="rgba(128,128,128,.18)" vertical={false} />
                           <XAxis
                             dataKey="timestamp"
                             tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            stroke="#98989f"
+                            stroke="#74807c"
                             tick={{ fontSize: 12 }}
                           />
-                          <YAxis domain={[0, 100]} stroke="#98989f" tick={{ fontSize: 12 }} />
+                          <YAxis domain={[0, 100]} stroke="#74807c" tick={{ fontSize: 12 }} />
                           <YAxis
                             yAxisId="temperature"
                             orientation="right"
                             domain={[10, 45]}
-                            stroke="#30d158"
+                            stroke="#3e8067"
                             tick={{ fontSize: 12 }}
                             width={42}
                           />
@@ -368,25 +414,26 @@ function App() {
                             labelFormatter={(value) => new Date(value).toLocaleString()}
                             formatter={(value, name) => [Number(value).toFixed(1), name === 'rh' ? 'Relative humidity (%)' : name]}
                           />
-                          <ReferenceLine y={80} stroke="#ff9f0a" strokeDasharray="5 5" label="80% RH" />
+                          <ReferenceLine y={80} stroke="#b77929" strokeDasharray="5 5" label="80% RH" />
                           <ReferenceDot
                             x={history.at(-1)?.timestamp}
                             y={history.at(-1)?.rh}
                             r={5}
-                            fill="#ff453a"
+                            fill="#b84d45"
                             stroke="#fff"
                           />
-                          <Line type="monotone" dataKey="rh" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="rh" stroke="#4f7f78" strokeWidth={2.5} dot={false} />
                           <Line
                             type="monotone"
                             dataKey="temp"
                             yAxisId="temperature"
-                            stroke="#30d158"
+                            stroke="#3e8067"
                             strokeWidth={2}
                             dot={false}
                           />
                         </LineChart>
-                      </ResponsiveContainer>
+                        </ResponsiveContainer>
+                      </>
                     ) : (
                       <div className="empty-state">No valid cloud readings for this room.</div>
                     )}
