@@ -16,7 +16,7 @@ from network_cloud import SimulatedInternet, EdgeToCloudBridge
 from shared_store import SQLiteCloud, DB_PATH
 from simulation.bulk_engine import ROOM_BASE_RH, generate_bulk
 
-st.set_page_config(page_title="Hygron | Virtual IoT Board", page_icon="🌡️", layout="wide")
+st.set_page_config(page_title="Hygron | Virtual IoT Board", layout="wide")
 
 
 def reset_state():
