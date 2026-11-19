@@ -62,7 +62,7 @@ The React dashboard and Streamlit Workbench use the same `data/hygron_demo.sqlit
 - Virtual **Raspberry Pi edge gateway** validates data and aggregates five-minute summaries.
 - Simulated **Internet connection** queues uploads while offline and forwards them after reconnection.
 - Virtual **cloud** persists delivered summaries in local SQLite.
-- Wokwi-inspired component visualization, stage-by-stage walkthrough, room selection and accelerated bulk scenarios.
+- Interactive vertical system-architecture walkthrough, room selection and accelerated bulk scenarios.
 
 ## Architecture
 
@@ -101,6 +101,8 @@ hygron_client_dashboard/
 │   └── README.md
 ├── simulation/
 │   ├── app.py                 # Virtual IoT workbench (port 8502)
+│   ├── board_widget.py        # Streamlit bridge for the interactive board
+│   ├── board_component/       # Local HTML/CSS/JS and component artwork
 │   ├── bulk_engine.py
 │   └── README.md
 ├── models/
@@ -114,7 +116,7 @@ hygron_client_dashboard/
 ├── shared_store.py
 ├── ml_bridge.py
 ├── inference.py
-├── board_visual.py
+├── board_visual.py            # Shared simulation stage labels
 ├── test_integration.py
 ├── requirements.txt
 ├── app.py                     # Compatibility launcher for dashboard
@@ -261,7 +263,9 @@ A separate Wokwi demonstration may still be used as supplementary evidence of th
 | File | Purpose |
 |---|---|
 | `simulation/app.py` | Main IoT Workbench interface and simulation controls |
-| `board_visual.py` | Virtual hardware board and data-flow visualization |
+| `simulation/board_widget.py` | Streamlit bridge for the interactive board |
+| `simulation/board_component/` | Local board layout, styling, interactions, and component artwork |
+| `board_visual.py` | Shared simulation stage labels |
 | `sensor_simulator.py` | Virtual environmental sensor and ESP32 behavior |
 | `edge_gateway.py` | Raspberry Pi edge processing, validation, and aggregation |
 | `network_cloud.py` | Simulated Internet connectivity and cloud transmission |
