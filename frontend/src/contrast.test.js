@@ -70,8 +70,8 @@ describe('color contrast (WCAG AA)', () => {
   }
 
   it.each([
-    ['refresh button text', t('text'), t('surface')],
-    ['refresh button hover text', t('accent-bright'), t('surface')],
+    ['white on refresh button', '#ffffff', t('action')],
+    ['white on refresh button hover', '#ffffff', t('action-deep')],
     ['white on methodology link', '#ffffff', t('accent')],
     ['alert "needs action" pill', '#74352f', blend('#b84d45', backgrounds['alert card'], 0.1)],
     ['alert "acknowledged" pill', '#2f6d55', blend('#3e8067', t('surface'), 0.1)],
@@ -90,7 +90,7 @@ describe('color contrast (WCAG AA)', () => {
   it.each([
     ['focus ring on canvas', t('focus'), t('canvas')],
     ['focus ring on surface', t('focus'), t('surface')],
-    ['humidity line', '#4f7f78', t('surface')],
+    ['humidity line', '#4f8a7b', t('surface')],
     ['temperature line', t('temp-line'), t('surface')],
     ['80% RH reference line', '#b77929', t('surface')],
     ['humidity bar fill on its track', t('accent'), t('surface-hover')],

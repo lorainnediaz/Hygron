@@ -562,8 +562,8 @@ export function App() {
                         <ComposedChart data={history} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
                           <defs>
                             <linearGradient id="rhFill" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#4f7f78" stopOpacity={0.28} />
-                              <stop offset="100%" stopColor="#4f7f78" stopOpacity={0.02} />
+                              <stop offset="0%" stopColor="#4f8a7b" stopOpacity={0.28} />
+                              <stop offset="100%" stopColor="#4f8a7b" stopOpacity={0.02} />
                             </linearGradient>
                           </defs>
                           <CartesianGrid stroke="rgba(38,52,49,.08)" vertical={false} />
@@ -614,7 +614,7 @@ export function App() {
                           <Area
                             type="monotone"
                             dataKey="rh"
-                            stroke="#4f7f78"
+                            stroke="#4f8a7b"
                             strokeWidth={2.5}
                             fill="url(#rhFill)"
                             baseValue={chartStats?.floor ?? 0}
