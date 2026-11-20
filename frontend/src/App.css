@@ -652,16 +652,44 @@ a:focus-visible {
 }
 
 .priority-panel.priority-high button {
-  border-color: var(--coral);
-  background: var(--coral);
+  border-color: #1f1d22;
+  background: #1f1d22;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(168, 66, 58, 0.24);
+  box-shadow: 0 6px 16px rgba(31, 29, 34, 0.3);
 }
 
 .priority-panel.priority-high button:hover {
-  border-color: var(--coral-deep);
-  background: var(--coral-deep);
-  box-shadow: 0 8px 18px rgba(168, 66, 58, 0.3);
+  border-color: #000000;
+  background: #000000;
+  box-shadow: 0 10px 22px rgba(31, 29, 34, 0.38);
+}
+
+/* High-risk banner: red gradient, white text, yellow warning icon, dark button. */
+.priority-panel.priority-high {
+  border: 0;
+  background: linear-gradient(135deg, #d92d45 0%, #b21d35 100%);
+  box-shadow: 0 2px 4px rgba(178, 29, 53, 0.18), 0 14px 34px rgba(178, 29, 53, 0.28);
+}
+
+.priority-high .priority-tile {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.priority-panel.priority-high .priority-eyebrow {
+  color: #ffffff;
+}
+
+.priority-warning-icon {
+  flex: none;
+  color: #ffe066;
+  fill: rgba(255, 224, 102, 0.18);
+}
+
+.priority-high .priority-status,
+.priority-panel.priority-high .priority-reading,
+.priority-panel.priority-high .unavailable-reason {
+  color: #ffffff;
 }
 
 .priority-panel button svg {
