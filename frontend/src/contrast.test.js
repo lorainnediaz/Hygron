@@ -80,7 +80,7 @@ describe('color contrast (WCAG AA)', () => {
     ['white text on red banner (dark end)', '#ffffff', '#b21d35'],
     ['red text on white banner button', '#b21d35', '#ffffff'],
     ['red text on banner button hover', '#b21d35', '#fff4f0'],
-    ['red text on yellow room tile', '#b21d35', '#ffe066'],
+    ['white text on room tile', '#ffffff', blend('#5a0818', '#d92d45', 0.22)],
     ['priority readings text', t('text-soft'), t('surface')],
     ['white on priority tile', '#ffffff', t('coral')],
     ['80% RH chart label', '#8a5a12', blend('#a8423a', t('surface'), 0.06)],
@@ -98,6 +98,7 @@ describe('color contrast (WCAG AA)', () => {
     ['humidity bar fill on its track', t('accent'), t('surface-hover')],
     ['humidity bar 80% marker', t('text'), t('surface-hover')],
     ['yellow warning icon on red banner', '#ffe066', '#d92d45'],
+    ['yellow tile border on red banner', '#ffe066', '#d92d45'],
     ['white button against red banner', '#ffffff', '#d92d45'],
     ['risk bar Medium segment', '#a06a1c', t('canvas')],
   ])('%s is at least 3:1', (_, fg, bg) => {
