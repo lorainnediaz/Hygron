@@ -82,6 +82,7 @@ describe('color contrast (WCAG AA)', () => {
     ['red text on banner button hover', '#b21d35', '#fff4f0'],
     ['priority readings text', t('text-soft'), t('surface')],
     ['white on priority tile', '#ffffff', t('coral')],
+    ['dark text on yellow room tile', '#1f1d22', '#ffe066'],
     ['80% RH chart label', '#8a5a12', blend('#a8423a', t('surface'), 0.06)],
     ['humidity bar caption', t('text-soft'), t('surface')],
   ])('%s is at least 4.5:1', (_, fg, bg) => {
