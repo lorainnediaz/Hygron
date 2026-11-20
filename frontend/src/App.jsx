@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { Check, ChevronDown } from 'lucide-react'
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   CircleMinus,
   Gauge,
@@ -18,20 +19,24 @@ import {
   ChevronsRight,
 } from 'lucide-react'
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   ReferenceDot,
 } from 'recharts'
 import './App.css'
 import { riskMeanings } from './risk'
+import { CountUp, HumidityBar, RiskBar } from './visuals'
 
 const API = '/api'
+const RISK_ORDER = ['High', 'Medium', 'Low', 'Unavailable']
 
 const riskStyles = {
   High: { icon: AlertTriangle, color: 'var(--coral)', label: 'High' },
@@ -70,25 +75,34 @@ async function fetchJson(path, options) {
   return response.json()
 }
 
-function RiskBadge({ risk }) {
+function RiskBadge({ risk, size = 15 }) {
   const style = riskStyles[risk] || riskStyles.Unavailable
   const Icon = style.icon
   return (
-    <span className="risk-badge" style={{ '--risk': style.color }}>
-      <Icon size={16} aria-hidden="true" />
+    <span className={`risk-badge risk-badge-${(riskStyles[risk] ? risk : 'Unavailable').toLowerCase()}`} style={{ '--risk': style.color }}>
+      <Icon size={size} aria-hidden="true" />
       {style.label}
     </span>
   )
 }
 
-function MetricCard({ label, value, caption, tone }) {
+function MetricCard({ label, value, caption, tone, children }) {
   return (
     <article className="metric-card">
       <div className="metric-label">{label}</div>
       <div className={`metric-value ${tone || ''}`}>{value}</div>
+      {children}
       {caption && <div className="metric-caption">{caption}</div>}
     </article>
   )
+}
+
+/** Hours-based tick labels: time of day for one day, date for longer ranges. */
+function formatTick(value, hours) {
+  const date = new Date(value)
+  return hours <= 24
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 export function App() {
@@ -98,6 +112,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [sidebarClosing, setSidebarClosing] = useState(false)
   const queryClient = useQueryClient()
+  const reduceMotion = useReducedMotion()
 
   const roomsQuery = useQuery({
     queryKey: ['rooms'],
@@ -131,11 +146,14 @@ export function App() {
     if (!history.length) return null
     const values = history.map((reading) => Number(reading.rh)).filter(Number.isFinite)
     if (!values.length) return null
+    const minimum = Math.min(...values)
     return {
       latest: values.at(-1),
-      minimum: Math.min(...values),
+      minimum,
       maximum: Math.max(...values),
       atThreshold: Math.round((values.filter((value) => value >= 80).length / values.length) * 100),
+      // Start the humidity axis at 40% unless readings go lower, so changes are visible.
+      floor: Math.max(0, Math.min(40, Math.floor((minimum - 5) / 10) * 10)),
     }
   }, [historyQuery.data])
   const loading = roomsQuery.isLoading || alertsQuery.isLoading || systemQuery.isLoading
@@ -340,14 +358,19 @@ export function App() {
               <>
                 {priority && (
                   <section
-                    className={`priority-panel priority-${priority.current_risk.toLowerCase()}`}
+                    className={`priority-panel reveal priority-${priority.current_risk.toLowerCase()}`}
+                    style={{ '--i': 0, '--risk': (riskStyles[priority.current_risk] || riskStyles.Unavailable).color }}
                     aria-label="Recommended room"
                   >
-                    {priority.current_risk === 'High' && (
-                      <AlertTriangle className="priority-warning-icon" size={22} aria-hidden="true" />
-                    )}
+                    <div className="priority-tile" aria-hidden="true">
+                      <span>Room</span>
+                      <strong>{priority.room_name.replace(/^Room\s*/i, '')}</strong>
+                    </div>
                     <div className="priority-copy">
-                      <p>{priority.current_risk === 'High' ? 'Immediate attention required' : 'Room to check'}</p>
+                      <p className="priority-eyebrow">
+                        {priority.current_risk === 'High' && <span className="pulse-dot" aria-hidden="true" />}
+                        {priority.current_risk === 'High' ? 'Immediate attention required' : 'Room to check'}
+                      </p>
                       <h2>{priority.room_name}</h2>
                       <div className="priority-status">
                         {priority.current_risk === 'High'
@@ -364,18 +387,20 @@ export function App() {
                     </div>
                     <button type="button" onClick={() => showRoomDetails(priority.room_id)}>
                       {priority.current_risk === 'High' ? 'Inspect room' : 'View room'}
+                      <ArrowRight size={16} aria-hidden="true" />
                     </button>
                   </section>
                 )}
 
-                <section aria-labelledby="risk-glance-title">
+                <section className="reveal" style={{ '--i': 1 }} aria-labelledby="risk-glance-title">
                   <h2 className="section-title" id="risk-glance-title">Risk at a glance</h2>
                   <p className="risk-scale-note">
                     Levels are model estimates from each room&apos;s simulated humidity and temperature over the last 60 days,
                     using VTT-derived mold-growth categories. They do not confirm that mold is present.
                   </p>
+                  <RiskBar counts={counts} order={RISK_ORDER} />
                   <ul className="risk-rail">
-                    {['High', 'Medium', 'Low', 'Unavailable'].map((risk) => {
+                    {RISK_ORDER.map((risk) => {
                       const RiskIcon = riskStyles[risk].icon
                       return (
                         <li
@@ -383,19 +408,19 @@ export function App() {
                           key={risk}
                           style={{ '--risk': riskStyles[risk].color }}
                         >
-                          <RiskIcon className="risk-rail-icon" size={18} aria-hidden="true" />
-                          <div>
-                            <strong>{counts[risk] || 0}</strong>
-                            <span className="risk-rail-label">{risk}</span>
-                            <p className="risk-meaning">{riskMeanings[risk]}</p>
+                          <div className="risk-rail-head">
+                            <strong><CountUp value={counts[risk] || 0} /></strong>
+                            <RiskIcon className="risk-rail-icon" size={18} aria-hidden="true" />
                           </div>
+                          <span className="risk-rail-label">{risk}</span>
+                          <p className="risk-meaning">{riskMeanings[risk]}</p>
                         </li>
                       )
                     })}
                   </ul>
                 </section>
 
-                <section aria-labelledby="rooms-title">
+                <section className="reveal" style={{ '--i': 2 }} aria-labelledby="rooms-title">
                   <h2 className="section-title" id="rooms-title">Rooms needing attention</h2>
                   <div className="room-table" role="group" aria-labelledby="rooms-title">
                     <div className="room-row room-header" aria-hidden="true">
@@ -405,6 +430,7 @@ export function App() {
                       <button
                         type="button"
                         className={selectedRoom === room.room_id ? 'room-row selected' : 'room-row'}
+                        style={{ '--risk': (riskStyles[room.current_risk] || riskStyles.Unavailable).color }}
                         key={room.room_id}
                         aria-pressed={selectedRoom === room.room_id}
                         aria-label={roomRowLabel(room)}
@@ -421,9 +447,15 @@ export function App() {
                 </section>
 
                 {selected && (
-                  <section aria-labelledby="room-details-title">
+                  <section className="reveal" style={{ '--i': 3 }} aria-labelledby="room-details-title">
                     <h2 className="section-title" id="room-details-title" tabIndex={-1}>{selected.room_name} details</h2>
-                    <div className="detail-grid">
+                    <motion.div
+                      key={selected.room_id}
+                      className="detail-grid"
+                      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+                    >
                       <MetricCard
                         label="ESTIMATED CURRENT RISK"
                         value={selected.current_risk}
@@ -434,7 +466,9 @@ export function App() {
                         label="RELATIVE HUMIDITY"
                         value={selected.rh != null ? `${Number(selected.rh).toFixed(1)}%` : 'Unavailable'}
                         tone={selected.rh >= 80 ? 'high' : ''}
-                      />
+                      >
+                        <HumidityBar rh={selected.rh} />
+                      </MetricCard>
                       <MetricCard
                         label="TEMPERATURE"
                         value={selected.temp != null ? `${Number(selected.temp).toFixed(1)} °C` : 'Unavailable'}
@@ -443,8 +477,15 @@ export function App() {
                         label="24-HOUR OUTLOOK"
                         value={forecast?.forecast_24h_risk || selected.forecast_24h_risk || 'Unavailable'}
                         tone={(forecast?.forecast_24h_risk || selected.forecast_24h_risk || 'unavailable').toLowerCase()}
-                      />
-                    </div>
+                      >
+                        <div className="outlook-pills">
+                          <RiskBadge risk={selected.current_risk} size={13} />
+                          <ArrowRight size={14} aria-hidden="true" />
+                          <span className="sr-only">to</span>
+                          <RiskBadge risk={forecast?.forecast_24h_risk || selected.forecast_24h_risk || 'Unavailable'} size={13} />
+                        </div>
+                      </MetricCard>
+                    </motion.div>
                     <p className="disclaimer">
                       Latest simulated reading: {selected.latest_timestamp || 'Unavailable'}.
                       Risk estimates describe simulated VTT-derived conditions, not confirmed mold.
@@ -470,7 +511,7 @@ export function App() {
                   </section>
                 )}
 
-                <section>
+                <section className="reveal" style={{ '--i': 4 }}>
                   <div className="section-heading">
                     <h2 className="section-title">Humidity history</h2>
                     <SelectPrimitive.Root value={String(hours)} onValueChange={(value) => setHours(Number(value))}>
@@ -518,22 +559,43 @@ export function App() {
                         </div>
                         <div className="chart-visual" role="img" aria-label={`Humidity and temperature chart for ${selected.room_name}`}>
                         <ResponsiveContainer width="100%" height={280}>
-                        <LineChart data={history}>
-                          <CartesianGrid stroke="rgba(128,128,128,.18)" vertical={false} />
+                        <ComposedChart data={history} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
+                          <defs>
+                            <linearGradient id="rhFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#4f7f78" stopOpacity={0.28} />
+                              <stop offset="100%" stopColor="#4f7f78" stopOpacity={0.02} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="rgba(38,52,49,.08)" vertical={false} />
                           <XAxis
                             dataKey="timestamp"
-                            tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            stroke="#74807c"
+                            tickFormatter={(value) => formatTick(value, hours)}
+                            stroke="#5b6763"
                             tick={{ fontSize: 12 }}
+                            tickLine={false}
+                            axisLine={false}
+                            minTickGap={56}
+                            interval="preserveStartEnd"
                           />
-                          <YAxis domain={[0, 100]} stroke="#74807c" tick={{ fontSize: 12 }} />
+                          <YAxis
+                            domain={[chartStats?.floor ?? 0, 100]}
+                            stroke="#5b6763"
+                            tick={{ fontSize: 12 }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(value) => `${value}%`}
+                            width={46}
+                          />
                           <YAxis
                             yAxisId="temperature"
                             orientation="right"
-                            domain={[10, 45]}
+                            domain={[(dataMin) => Math.floor(dataMin - 6), (dataMax) => Math.ceil(dataMax + 6)]}
                             stroke="#5a5f8f"
                             tick={{ fontSize: 12 }}
-                            width={42}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(value) => `${Math.round(value)}°`}
+                            width={36}
                           />
                           <Tooltip
                             labelFormatter={(value) => new Date(value).toLocaleString()}
@@ -542,25 +604,41 @@ export function App() {
                               name === 'rh' ? 'Relative humidity (%)' : name === 'temp' ? 'Temperature (°C)' : name,
                             ]}
                           />
-                          <ReferenceLine y={80} stroke="#b77929" strokeDasharray="5 5" label="80% RH" />
-                          <ReferenceDot
-                            x={history.at(-1)?.timestamp}
-                            y={history.at(-1)?.rh}
-                            r={5}
-                            fill="#b84d45"
-                            stroke="#fff"
+                          <ReferenceArea y1={80} y2={100} fill="#a8423a" fillOpacity={0.06} stroke="none" ifOverflow="hidden" />
+                          <ReferenceLine
+                            y={80}
+                            stroke="#b77929"
+                            strokeDasharray="5 5"
+                            label={{ value: '80% RH', position: 'insideTopRight', fill: '#8a5a12', fontSize: 11 }}
                           />
-                          <Line type="monotone" dataKey="rh" stroke="#4f7f78" strokeWidth={2.5} dot={false} />
+                          <Area
+                            type="monotone"
+                            dataKey="rh"
+                            stroke="#4f7f78"
+                            strokeWidth={2.5}
+                            fill="url(#rhFill)"
+                            baseValue={chartStats?.floor ?? 0}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
                           <Line
                             type="monotone"
                             dataKey="temp"
                             yAxisId="temperature"
                             stroke="#5a5f8f"
-                            strokeWidth={2}
-                            strokeDasharray="2 3"
+                            strokeWidth={1.75}
+                            strokeDasharray="6 4"
                             dot={false}
                           />
-                        </LineChart>
+                          <ReferenceDot
+                            x={history.at(-1)?.timestamp}
+                            y={history.at(-1)?.rh}
+                            r={5}
+                            fill="#a8423a"
+                            stroke="#fff"
+                            strokeWidth={2}
+                          />
+                        </ComposedChart>
                         </ResponsiveContainer>
                         </div>
                         {chartStats && (
@@ -582,7 +660,7 @@ export function App() {
                 </section>
 
                 {selected && (
-                  <section className="outlook-section" aria-labelledby="outlook-title">
+                  <section className="outlook-section reveal" style={{ '--i': 5 }} aria-labelledby="outlook-title">
                     <div className="section-heading">
                       <h2 className="section-title" id="outlook-title">24-hour estimated outlook</h2>
                       <span className={`outlook-direction direction-${forecastDirection.toLowerCase()}`}>
@@ -631,7 +709,7 @@ export function App() {
                   </section>
                 )}
 
-                <section>
+                <section className="reveal" style={{ '--i': 6 }}>
                   <h2 className="section-title">Alerts</h2>
                   <div className="alert-list-summary">
                     <p>

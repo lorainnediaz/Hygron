@@ -42,11 +42,23 @@ const backgrounds = {
   surface: t('surface'),
   canvas: t('canvas'),
   raised: t('surface-raised'),
-  // Tinted panels drawn with rgba(184, 77, 69, a) over a base color in App.css.
-  'alert card': blend('#b84d45', t('canvas'), 0.055),
+  hover: t('surface-hover'),
+  'alert card': '#fbf3f1',
 }
 
 const textTokens = ['text', 'text-soft', 'muted', 'accent-bright', 'coral', 'amber', 'green', 'unavailable']
+const riskTokens = ['coral', 'amber', 'green', 'unavailable']
+
+describe('risk pill badges (color-mix 12% over white)', () => {
+  for (const name of riskTokens) {
+    it(`--${name} text on its own pill is at least 4.5:1`, () => {
+      expect(contrast(t(name), blend(t(name), '#ffffff', 0.12))).toBeGreaterThanOrEqual(4.5)
+    })
+  }
+  it('white text on every priority tile color is at least 4.5:1', () => {
+    for (const name of riskTokens) expect(contrast('#ffffff', t(name))).toBeGreaterThanOrEqual(4.5)
+  })
+})
 
 describe('color contrast (WCAG AA)', () => {
   for (const name of textTokens) {
@@ -58,16 +70,19 @@ describe('color contrast (WCAG AA)', () => {
   }
 
   it.each([
-    ['white on refresh button', '#ffffff', t('action')],
-    ['white on refresh button hover', '#ffffff', t('action-hover')],
+    ['refresh button text', t('text'), t('surface')],
+    ['refresh button hover text', t('accent-bright'), t('surface')],
     ['white on methodology link', '#ffffff', t('accent')],
     ['alert "needs action" pill', '#74352f', blend('#b84d45', backgrounds['alert card'], 0.1)],
     ['alert "acknowledged" pill', '#2f6d55', blend('#3e8067', t('surface'), 0.1)],
-    ['priority-high heading on red panel', t('coral'), '#f9ebe5'],
-    ['priority-high status on red panel', '#74352f', '#f9ebe5'],
-    ['priority-high readings on red panel', t('text-soft'), '#f9ebe5'],
+    ['priority eyebrow text', t('coral'), t('surface')],
+    ['priority-high status text', '#74352f', t('surface')],
+    ['priority readings text', t('text-soft'), t('surface')],
     ['priority-high button text', '#ffffff', t('coral')],
-    ['priority-high button hover text', '#ffffff', '#8f3730'],
+    ['priority-high button hover text', '#ffffff', t('coral-deep')],
+    ['white on priority tile', '#ffffff', t('coral')],
+    ['80% RH chart label', '#8a5a12', blend('#a8423a', t('surface'), 0.06)],
+    ['humidity bar caption', t('text-soft'), t('surface')],
   ])('%s is at least 4.5:1', (_, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5)
   })
@@ -78,6 +93,9 @@ describe('color contrast (WCAG AA)', () => {
     ['humidity line', '#4f7f78', t('surface')],
     ['temperature line', t('temp-line'), t('surface')],
     ['80% RH reference line', '#b77929', t('surface')],
+    ['humidity bar fill on its track', t('accent'), t('surface-hover')],
+    ['humidity bar 80% marker', t('text'), t('surface-hover')],
+    ['risk bar Medium segment', '#a06a1c', t('canvas')],
   ])('%s is at least 3:1', (_, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3)
   })
