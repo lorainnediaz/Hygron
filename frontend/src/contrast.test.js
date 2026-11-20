@@ -78,7 +78,8 @@ describe('color contrast (WCAG AA)', () => {
     ['priority eyebrow text (non-High)', t('coral'), t('surface')],
     ['white text on red banner (light end)', '#ffffff', '#d92d45'],
     ['white text on red banner (dark end)', '#ffffff', '#b21d35'],
-    ['white text on dark banner button', '#ffffff', '#1f1d22'],
+    ['red text on white banner button', '#b21d35', '#ffffff'],
+    ['red text on banner button hover', '#b21d35', '#fff4f0'],
     ['dark text on yellow room tile', '#1f1d22', '#ffe066'],
     ['priority readings text', t('text-soft'), t('surface')],
     ['white on priority tile', '#ffffff', t('coral')],
@@ -97,7 +98,7 @@ describe('color contrast (WCAG AA)', () => {
     ['humidity bar fill on its track', t('accent'), t('surface-hover')],
     ['humidity bar 80% marker', t('text'), t('surface-hover')],
     ['yellow warning icon on red banner', '#ffe066', '#d92d45'],
-    ['dark button against red banner', '#1f1d22', '#d92d45'],
+    ['white button against red banner', '#ffffff', '#d92d45'],
     ['risk bar Medium segment', '#a06a1c', t('canvas')],
   ])('%s is at least 3:1', (_, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3)

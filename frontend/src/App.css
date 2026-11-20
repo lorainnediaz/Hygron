@@ -652,16 +652,16 @@ a:focus-visible {
 }
 
 .priority-panel.priority-high button {
-  border-color: #1f1d22;
-  background: #1f1d22;
-  color: #ffffff;
-  box-shadow: 0 6px 16px rgba(31, 29, 34, 0.3);
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #b21d35;
+  box-shadow: 0 6px 16px rgba(120, 15, 32, 0.25);
 }
 
 .priority-panel.priority-high button:hover {
-  border-color: #000000;
-  background: #000000;
-  box-shadow: 0 10px 22px rgba(31, 29, 34, 0.38);
+  border-color: #fff4f0;
+  background: #fff4f0;
+  box-shadow: 0 10px 22px rgba(120, 15, 32, 0.32);
 }
 
 /* High-risk banner: red gradient, white text, yellow warning icon, dark button. */
