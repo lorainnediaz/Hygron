@@ -76,8 +76,7 @@ describe('color contrast (WCAG AA)', () => {
     ['alert "needs action" pill', '#74352f', blend('#b84d45', backgrounds['alert card'], 0.1)],
     ['alert "acknowledged" pill', '#2f6d55', blend('#3e8067', t('surface'), 0.1)],
     ['priority eyebrow text (non-High)', t('coral'), t('surface')],
-    ['white text on red banner (light end)', '#ffffff', '#d92d45'],
-    ['white text on red banner (dark end)', '#ffffff', '#b21d35'],
+    ['white text on red banner', '#ffffff', '#c9253c'],
     ['red text on white banner button', '#b21d35', '#ffffff'],
     ['red text on banner button hover', '#b21d35', '#fff4f0'],
     ['priority readings text', t('text-soft'), t('surface')],
@@ -97,8 +96,8 @@ describe('color contrast (WCAG AA)', () => {
     ['80% RH reference line', '#b77929', t('surface')],
     ['humidity bar fill on its track', t('accent'), t('surface-hover')],
     ['humidity bar 80% marker', t('text'), t('surface-hover')],
-    ['yellow warning icon on red banner', '#ffe066', '#d92d45'],
-    ['white button against red banner', '#ffffff', '#d92d45'],
+    ['yellow warning icon on red banner', '#ffe066', '#c9253c'],
+    ['white button against red banner', '#ffffff', '#c9253c'],
     ['risk bar Medium segment', '#a06a1c', t('canvas')],
   ])('%s is at least 3:1', (_, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3)
