@@ -79,6 +79,7 @@ describe('color contrast (WCAG AA)', () => {
     ['white text on red banner (light end)', '#ffffff', '#d92d45'],
     ['white text on red banner (dark end)', '#ffffff', '#b21d35'],
     ['white text on dark banner button', '#ffffff', '#1f1d22'],
+    ['dark text on yellow room tile', '#1f1d22', '#ffe066'],
     ['priority readings text', t('text-soft'), t('surface')],
     ['white on priority tile', '#ffffff', t('coral')],
     ['80% RH chart label', '#8a5a12', blend('#a8423a', t('surface'), 0.06)],
