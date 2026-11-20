@@ -368,10 +368,9 @@ export function App() {
                     </div>
                     <div className="priority-copy">
                       <p className="priority-eyebrow">
-                        {priority.current_risk === 'High' && <span className="pulse-dot" aria-hidden="true" />}
                         {priority.current_risk === 'High' ? 'Immediate attention required' : 'Room to check'}
                       </p>
-                      <h2>{priority.room_name}</h2>
+                      <h2 className="sr-only">{priority.room_name}</h2>
                       <div className="priority-status">
                         {priority.current_risk === 'High'
                           ? 'High estimated risk. Inspect now.'

@@ -615,35 +615,6 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.pulse-dot {
-  position: relative;
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--coral);
-}
-
-.pulse-dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--coral);
-  animation: pulse-ring 1.8s var(--ease) infinite;
-}
-
-@keyframes pulse-ring {
-  from {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(3);
-  }
-}
-
 .priority-panel h2 {
   margin: 2px 0 0;
   font-size: 1.12rem;
