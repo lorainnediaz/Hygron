@@ -13,6 +13,7 @@ import {
   ChevronDown,
   CircleMinus,
   Cpu,
+  ExternalLink,
   Gauge,
   Info,
   LayoutDashboard,
@@ -42,7 +43,6 @@ const RISK_ORDER = ['High', 'Medium', 'Low', 'Unavailable']
 const PAGES = [
   ['Dashboard', LayoutDashboard],
   ['Methodology', Info],
-  ['IoT Workbench', Cpu],
 ]
 
 const riskStyles = {
@@ -285,23 +285,25 @@ export function App() {
           {page !== 'Dashboard' ? (
             <section className="panel placeholder-page">
               <h1>{page}</h1>
-              {page === 'IoT Workbench' ? (
-                <>
+              <h2>Software-in-the-Loop architecture</h2>
+              <p>Virtual BME680, virtual ESP32, Raspberry Pi gateway, simulated Internet, SQLite, FastAPI, then this React dashboard.</p>
+              <h2>Model limitation</h2>
+              <p>Hygron estimates simulated VTT-derived mold-growth risk. It does not detect or confirm physical mold.</p>
+              <div className="simulator-link">
+                <Cpu className="simulator-link-icon" size={22} aria-hidden="true" />
+                <div>
+                  <h2>IoT simulator</h2>
                   <p>
-                    The virtual sensor, ESP32, edge gateway, simulated Internet, and SQLite pipeline remain in the separate Streamlit IoT Workbench.
+                    The virtual sensor, ESP32, edge gateway, simulated Internet, and SQLite pipeline run in the separate Streamlit IoT simulator.
+                    It opens in a new tab.
                   </p>
-                  <a className="method-link" href="http://127.0.0.1:8501/workbench" target="_blank" rel="noreferrer">
-                    Open IoT Workbench
-                  </a>
-                </>
-              ) : (
-                <>
-                  <h2>Software-in-the-Loop architecture</h2>
-                  <p>Virtual BME680, virtual ESP32, Raspberry Pi gateway, simulated Internet, SQLite, FastAPI, then this React dashboard.</p>
-                  <h2>Model limitation</h2>
-                  <p>Hygron estimates simulated VTT-derived mold-growth risk. It does not detect or confirm physical mold.</p>
-                </>
-              )}
+                </div>
+                <a className="method-link" href="http://127.0.0.1:8501/workbench" target="_blank" rel="noreferrer">
+                  Open IoT simulator
+                  <ExternalLink size={15} aria-hidden="true" />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </div>
             </section>
           ) : (
             <>

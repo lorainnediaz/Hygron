@@ -39,6 +39,18 @@ describe('top navigation', () => {
     await userEvent.click(dashboard)
     expect(await screen.findByRole('heading', { name: 'Room overview' })).toBeTruthy()
   })
+
+  it('links to the IoT simulator from the end of Methodology instead of a separate tab', async () => {
+    mockApi()
+    renderApp()
+    const nav = await screen.findByRole('navigation', { name: 'Main navigation' })
+    expect(within(nav).queryByRole('button', { name: /IoT Workbench/ })).toBeNull()
+
+    await userEvent.click(within(nav).getByRole('button', { name: 'Methodology' }))
+    const link = await screen.findByRole('link', { name: /Open IoT simulator/ })
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toContain('noreferrer')
+  })
 })
 
 describe('room timeline helpers', () => {
