@@ -186,6 +186,9 @@ Both apps must see the same SQLite file. If needed, set the identical absolute `
 ```powershell
 python -m unittest test_integration.py -v
 python -m unittest test_api.py -v
+cd frontend
+npm test
+npm run lint
 ```
 
 The integration tests cover representative data flow, SQLite handoff and network/bulk behaviors; they do not validate real sensor accuracy, actual network reliability, or deployment readiness.
@@ -212,12 +215,32 @@ The integration tests cover representative data flow, SQLite handoff and network
 - [x] Mobile room-card layout
 - [x] HCI task scenarios and heuristic evaluation template
 - [x] HCI scenario-based usability testing guide
+- [x] Risk-level explanations and plain-language reasons for Unavailable rooms
+- [x] Alert acknowledgment retention policy (90 days by default, see below)
+- [x] Participant testing kit (`docs/usability-testing-kit.md`)
 - [ ] Complete mobile-device usability testing with participants
 - [ ] Complete heuristic evaluation with participants
 - [ ] Complete scenario-based usability testing with participants
-- [ ] Alert history retention policy for deployment
-- [ ] Calibrated forecast confidence
+- [ ] Calibrated forecast confidence (blocked, see below)
 - [ ] Real hardware and hosted cloud integration
+
+## Alert acknowledgment retention
+
+Acknowledgments are stored in the `alert_acknowledgments` SQLite table. Each record holds only the alert ID and the time it was acknowledged. No staff names or guest information are stored.
+
+- Records older than **90 days** are deleted each time the FastAPI backend starts.
+- Change the period with `HYGRON_ALERT_ACK_RETENTION_DAYS` (whole days, at least 1). An invalid value stops the backend from starting, so a typo cannot silently disable cleanup.
+- `/api/system-status` reports the active period as `alert_acknowledgment_retention_days`.
+- An alert ID contains the room and reading time, so an alert older than the retention period shows as **Action needed** again if it is still the room's latest High reading. This is deliberate: an old acknowledgment should not hide a room that is still High.
+- For a real deployment, confirm the period with the hotel's record-keeping policy before going live.
+
+## Forecast confidence
+
+The dashboard shows forecast confidence as unavailable and explains why. The Random Forest can output class scores, but those scores are not reliable probabilities until they are calibrated against labeled data the model has not seen. That labeled evaluation data is not included in this repository, so showing a percentage would overstate how sure the model is. To complete this item:
+
+1. Get the held-out simulated evaluation set used for the macro-F1 figures above.
+2. Calibrate the forecast model's scores on it (for example, scikit-learn `CalibratedClassifierCV`) and check the result with a reliability plot.
+3. Only then show a confidence value, and keep the existing limitations text.
 
 ## HCI scenario-based usability test
 
@@ -262,9 +285,11 @@ For each finding record: screen, heuristic, severity from 0–4, evidence, and r
 - [x] Chart legend and text alternative
 - [x] Select menu keyboard support
 - [x] Reduced-motion styles
-- [ ] Screen-reader pass with a complete workflow
-- [ ] Contrast pass for every risk and text state
-- [ ] Keyboard-only test for every primary task
+- [x] Contrast pass for every risk and text state (WCAG AA, checked by `frontend/src/contrast.test.js`)
+- [x] Automated keyboard-only test for every primary task (`frontend/src/App.keyboard.test.jsx`)
+- [x] Automated axe-core semantics check (`frontend/src/App.a11y.test.jsx`)
+- [ ] Screen-reader pass with a complete workflow (needs a person using NVDA or VoiceOver; script in the testing kit)
+- [ ] Keyboard-only test with participants
 
 ## Reset local demo data
 

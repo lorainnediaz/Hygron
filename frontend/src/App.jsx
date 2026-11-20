@@ -29,14 +29,36 @@ import {
   ReferenceDot,
 } from 'recharts'
 import './App.css'
+import { riskMeanings } from './risk'
 
 const API = '/api'
 
 const riskStyles = {
-  High: { icon: AlertTriangle, color: '#b84d45', label: 'High — Inspect first' },
-  Medium: { icon: Gauge, color: '#b77929', label: 'Medium — Monitor' },
-  Low: { icon: CheckCircle2, color: '#3e8067', label: 'Low — Normal monitoring' },
-  Unavailable: { icon: CircleMinus, color: '#91a098', label: 'Unavailable — Check data' },
+  High: { icon: AlertTriangle, color: 'var(--coral)', label: 'High' },
+  Medium: { icon: Gauge, color: 'var(--amber)', label: 'Medium' },
+  Low: { icon: CheckCircle2, color: 'var(--green)', label: 'Low' },
+  Unavailable: { icon: CircleMinus, color: 'var(--unavailable)', label: 'Unavailable' },
+}
+
+const staffActions = { High: 'Inspect', Medium: 'Monitor', Low: 'Continue', Unavailable: 'Review data' }
+
+const CONFIDENCE_FALLBACK = "The model's scores haven't been checked against labeled data, so no percentage is shown."
+
+function formatReading(value, unit) {
+  return value != null ? `${Number(value).toFixed(1)}${unit}` : 'Unavailable'
+}
+
+function roomRowLabel(room) {
+  const parts = [
+    `${room.room_name}: ${room.current_risk} risk`,
+    `humidity ${formatReading(room.rh, '%')}`,
+    `temperature ${formatReading(room.temp, ' °C')}`,
+    `action ${staffActions[room.current_risk] || staffActions.Unavailable}`,
+  ]
+  if (room.current_risk === 'Unavailable' && room.unavailable_reason) {
+    parts.push(`reason: ${room.unavailable_reason}`)
+  }
+  return parts.join(', ')
 }
 
 async function fetchJson(path, options) {
@@ -161,6 +183,12 @@ export function App() {
     })
   }
 
+  function showRoomDetails(roomId) {
+    setSelectedRoom(roomId)
+    // Move focus to the updated details so keyboard and screen-reader users land on the change.
+    window.requestAnimationFrame(() => document.getElementById('room-details-title')?.focus())
+  }
+
   function openSidebar() {
     setSidebarClosing(false)
     setSidebarCollapsed(false)
@@ -243,7 +271,7 @@ export function App() {
         )}
       </AnimatePresence>
 
-      <main className="main" id="main-content">
+      <main className="main" id="main-content" tabIndex={-1}>
         {page !== 'Dashboard' ? (
           <section className="content-card placeholder-page">
             <h1>{page}</h1>
@@ -307,7 +335,7 @@ export function App() {
             )}
 
             {loading ? (
-              <div className="loading-card">Loading room monitoring data…</div>
+              <div className="loading-card" role="status">Loading room monitoring data…</div>
             ) : (
               <>
                 {priority && (
@@ -316,74 +344,92 @@ export function App() {
                     aria-label="Recommended room"
                   >
                     {priority.current_risk === 'High' && (
-                      <AlertTriangle className="priority-warning-icon" size={26} aria-hidden="true" />
+                      <AlertTriangle className="priority-warning-icon" size={22} aria-hidden="true" />
                     )}
                     <div className="priority-copy">
                       <p>{priority.current_risk === 'High' ? 'Immediate attention required' : 'Room to check'}</p>
                       <h2>{priority.room_name}</h2>
                       <div className="priority-status">
-                        <span className={`status-dot ${priority.current_risk.toLowerCase()}`} />
                         {priority.current_risk === 'High'
-                          ? 'High estimated risk — inspect now'
+                          ? 'High estimated risk. Inspect now.'
                           : `${priority.current_risk} estimated risk`}
                       </div>
                       <span className="priority-reading">
                         {priority.rh != null ? `${Number(priority.rh).toFixed(1)}% RH` : 'Humidity unavailable'}
-                        {priority.temp != null ? ` · ${Number(priority.temp).toFixed(1)} °C` : ''}
+                        {priority.temp != null ? `, ${Number(priority.temp).toFixed(1)} °C` : ''}
                       </span>
+                      {priority.current_risk === 'Unavailable' && priority.unavailable_reason && (
+                        <span className="unavailable-reason">Reason: {priority.unavailable_reason}</span>
+                      )}
                     </div>
-                    <button type="button" onClick={() => setSelectedRoom(priority.room_id)}>
+                    <button type="button" onClick={() => showRoomDetails(priority.room_id)}>
                       {priority.current_risk === 'High' ? 'Inspect room' : 'View room'}
                     </button>
                   </section>
                 )}
 
-                <section>
-                  <h2 className="section-title">Risk at a glance</h2>
-                  <div className="risk-rail">
-                    {['High', 'Medium', 'Low', 'Unavailable'].map((risk) => (
-                      <div className="risk-rail-item" key={risk}>
-                        <span className={`status-dot ${risk.toLowerCase()}`} />
-                        <div>
-                          <strong>{counts[risk] || 0}</strong>
-                          <span>{risk}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <section aria-labelledby="risk-glance-title">
+                  <h2 className="section-title" id="risk-glance-title">Risk at a glance</h2>
+                  <p className="risk-scale-note">
+                    Levels are model estimates from each room&apos;s simulated humidity and temperature over the last 60 days,
+                    using VTT-derived mold-growth categories. They do not confirm that mold is present.
+                  </p>
+                  <ul className="risk-rail">
+                    {['High', 'Medium', 'Low', 'Unavailable'].map((risk) => {
+                      const RiskIcon = riskStyles[risk].icon
+                      return (
+                        <li
+                          className={`risk-rail-item ${risk.toLowerCase()}`}
+                          key={risk}
+                          style={{ '--risk': riskStyles[risk].color }}
+                        >
+                          <RiskIcon className="risk-rail-icon" size={18} aria-hidden="true" />
+                          <div>
+                            <strong>{counts[risk] || 0}</strong>
+                            <span className="risk-rail-label">{risk}</span>
+                            <p className="risk-meaning">{riskMeanings[risk]}</p>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </section>
 
-                <section>
-                  <h2 className="section-title">Rooms needing attention</h2>
-                  <div className="room-table" role="table" aria-label="Room risk summary">
-                    <div className="room-row room-header" role="row">
+                <section aria-labelledby="rooms-title">
+                  <h2 className="section-title" id="rooms-title">Rooms needing attention</h2>
+                  <div className="room-table" role="group" aria-labelledby="rooms-title">
+                    <div className="room-row room-header" aria-hidden="true">
                       <span>Room</span><span>Estimated risk</span><span>Humidity</span><span>Temperature</span><span>Staff action</span>
                     </div>
                     {roomList.map((room) => (
                       <button
                         type="button"
-                        role="row"
                         className={selectedRoom === room.room_id ? 'room-row selected' : 'room-row'}
                         key={room.room_id}
                         aria-pressed={selectedRoom === room.room_id}
-                        aria-label={`Select ${room.room_name}, ${room.current_risk} risk`}
+                        aria-label={roomRowLabel(room)}
                         onClick={() => setSelectedRoom(room.room_id)}
                       >
                         <strong className="room-cell room-name" data-label="Room">{room.room_name}</strong>
                         <span className="room-cell room-risk" data-label="Estimated risk"><RiskBadge risk={room.current_risk} /></span>
-                        <span className="room-cell" data-label="Humidity">{room.rh != null ? `${Number(room.rh).toFixed(1)}%` : 'Unavailable'}</span>
-                        <span className="room-cell" data-label="Temperature">{room.temp != null ? `${Number(room.temp).toFixed(1)} °C` : 'Unavailable'}</span>
-                        <span className="room-cell" data-label="Staff action">{room.current_risk === 'High' ? 'Inspect' : room.current_risk === 'Medium' ? 'Monitor' : room.current_risk === 'Low' ? 'Continue' : 'Review data'}</span>
+                        <span className="room-cell" data-label="Humidity">{formatReading(room.rh, '%')}</span>
+                        <span className="room-cell" data-label="Temperature">{formatReading(room.temp, ' °C')}</span>
+                        <span className="room-cell" data-label="Staff action">{staffActions[room.current_risk] || staffActions.Unavailable}</span>
                       </button>
                     ))}
                   </div>
                 </section>
 
                 {selected && (
-                  <section>
-                    <h2 className="section-title">{selected.room_name} details</h2>
+                  <section aria-labelledby="room-details-title">
+                    <h2 className="section-title" id="room-details-title" tabIndex={-1}>{selected.room_name} details</h2>
                     <div className="detail-grid">
-                      <MetricCard label="ESTIMATED CURRENT RISK" value={selected.current_risk} tone={selected.current_risk.toLowerCase()} />
+                      <MetricCard
+                        label="ESTIMATED CURRENT RISK"
+                        value={selected.current_risk}
+                        tone={selected.current_risk.toLowerCase()}
+                        caption={selected.current_risk !== 'Unavailable' ? riskMeanings[selected.current_risk] : undefined}
+                      />
                       <MetricCard
                         label="RELATIVE HUMIDITY"
                         value={selected.rh != null ? `${Number(selected.rh).toFixed(1)}%` : 'Unavailable'}
@@ -416,7 +462,9 @@ export function App() {
                       <span>
                         {selected.current_risk === 'High'
                           ? 'Check the room, inspect damp surfaces, and review the humidity trend.'
-                          : 'Risk estimates do not confirm that physical mold is present.'}
+                          : selected.current_risk === 'Unavailable'
+                            ? `Reason: ${selected.unavailable_reason || 'The backend did not report a reason.'}`
+                            : 'Risk estimates do not confirm that physical mold is present.'}
                       </span>
                     </div>
                   </section>
@@ -483,13 +531,16 @@ export function App() {
                             yAxisId="temperature"
                             orientation="right"
                             domain={[10, 45]}
-                            stroke="#3e8067"
+                            stroke="#5a5f8f"
                             tick={{ fontSize: 12 }}
                             width={42}
                           />
                           <Tooltip
                             labelFormatter={(value) => new Date(value).toLocaleString()}
-                            formatter={(value, name) => [Number(value).toFixed(1), name === 'rh' ? 'Relative humidity (%)' : name]}
+                            formatter={(value, name) => [
+                              Number(value).toFixed(1),
+                              name === 'rh' ? 'Relative humidity (%)' : name === 'temp' ? 'Temperature (°C)' : name,
+                            ]}
                           />
                           <ReferenceLine y={80} stroke="#b77929" strokeDasharray="5 5" label="80% RH" />
                           <ReferenceDot
@@ -504,8 +555,9 @@ export function App() {
                             type="monotone"
                             dataKey="temp"
                             yAxisId="temperature"
-                            stroke="#3e8067"
+                            stroke="#5a5f8f"
                             strokeWidth={2}
+                            strokeDasharray="2 3"
                             dot={false}
                           />
                         </LineChart>
@@ -556,13 +608,23 @@ export function App() {
                         {selected.latest_timestamp ? ` (${selected.latest_timestamp})` : ''}.
                         This is supplementary decision support, not a guaranteed warning.
                       </p>
-                      <p className="forecast-confidence">Forecast confidence: <strong>Unavailable</strong></p>
+                      {(forecast?.forecast_24h_risk || 'Unavailable') === 'Unavailable' && forecast?.unavailable_reason && (
+                        <p className="unavailable-reason">Outlook unavailable: {forecast.unavailable_reason}</p>
+                      )}
+                      <div className="confidence-note">
+                        <Info className="confidence-note-icon" size={16} aria-hidden="true" />
+                        <p>
+                          <strong>How sure is this outlook?</strong>{' '}
+                          We can&apos;t say yet. {forecast?.confidence_reason || CONFIDENCE_FALLBACK}{' '}
+                          Check the room yourself before acting on it.
+                        </p>
+                      </div>
                       <details className="outlook-limitations">
                         <summary>Forecast limitations</summary>
                         <p>
-                          This is one predicted category at +24 hours, not an hourly curve.
-                          The model is trained on simulated VTT-derived labels and may not predict real-world mold conditions.
-                          No calibrated confidence estimate is available; staff should confirm conditions before acting.
+                          This is one predicted category for 24 hours from the latest reading, not an hourly curve.
+                          The model was trained on simulated VTT-derived labels and may not match real-world mold conditions.
+                          In testing it often missed rooms whose risk was about to change.
                         </p>
                       </details>
                     </div>
@@ -574,7 +636,7 @@ export function App() {
                   <div className="alert-list-summary">
                     <p>
                       <strong>{alerts.filter((alert) => alert.status !== 'Acknowledged').length} active</strong>
-                      <span> · {alerts.length} current alert{alerts.length === 1 ? '' : 's'} in this session</span>
+                      <span> out of {alerts.length} current alert{alerts.length === 1 ? '' : 's'} in this session</span>
                     </p>
                     <span>Acknowledgment records review; it does not confirm resolution.</span>
                   </div>
@@ -595,13 +657,16 @@ export function App() {
                           </div>
                           <p>
                             Humidity: {alert.rh != null ? `${Number(alert.rh).toFixed(1)}%` : 'Unavailable'}
-                            {' · '}Temperature: {alert.temp != null ? `${Number(alert.temp).toFixed(1)} °C` : 'Unavailable'}
+                            {', '}temperature: {alert.temp != null ? `${Number(alert.temp).toFixed(1)} °C` : 'Unavailable'}
                           </p>
                           <p className="alert-time">{alert.timestamp}</p>
                         </div>
                       </div>
                       <button
                         type="button"
+                        aria-label={alert.status === 'Acknowledged'
+                          ? `Reviewed: alert for ${alert.room_name} already acknowledged`
+                          : `Acknowledge alert for ${alert.room_name}`}
                         disabled={alert.status === 'Acknowledged' || acknowledgeMutation.isPending}
                         onClick={() => acknowledgeMutation.mutate(alert.id)}
                       >
