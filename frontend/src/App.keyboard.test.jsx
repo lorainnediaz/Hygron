@@ -43,13 +43,11 @@ describe('keyboard-only primary tasks', () => {
     expect(document.activeElement.textContent).toBe('Skip to dashboard content')
   })
 
-  it('opens the sidebar and navigates to Methodology', async () => {
+  it('navigates to Methodology with the top tabs', async () => {
     mockApi()
     renderApp()
     await screen.findByRole('button', { name: /^Room 102:/ })
     const user = userEvent.setup()
-    await tabTo(user, named(/^Expand sidebar$/))
-    await user.keyboard('{Enter}')
     await tabTo(user, named(/^Methodology$/))
     await user.keyboard('{Enter}')
     expect(await screen.findByRole('heading', { name: 'Methodology' })).toBeTruthy()
