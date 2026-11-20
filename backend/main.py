@@ -16,6 +16,64 @@ from warm_history import ROOMS, seed_default_rooms
 MANILA = timezone(timedelta(hours=8))
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models"
+DEFAULT_ACK_RETENTION_DAYS = 90
+CONFIDENCE_REASON = (
+    "The model's scores haven't been checked against labeled data, "
+    "so no percentage is shown."
+)
+
+
+def unavailable_reason(code: str, history_count: int = 0) -> str:
+    """Plain-language explanation shown to staff when no risk estimate exists."""
+    reasons = {
+        "no_data": "No valid readings have been received for this room.",
+        "model_unavailable": "The risk model files could not be loaded.",
+        "insufficient_history": (
+            f"The model needs 60 days of continuous readings; "
+            f"{history_count:,} of {HISTORY_ROWS:,} have been received."
+        ),
+        "history_gaps": "The 60-day history has missing or duplicate readings, so the model cannot run.",
+        "invalid_readings": "Some readings are outside the valid sensor range.",
+        "model_error": "The model could not produce an estimate from the latest readings.",
+    }
+    return reasons[code]
+
+
+def classify_feature_error(message: str) -> str:
+    if message.startswith("Insufficient history"):
+        return "insufficient_history"
+    if "Missing or duplicate" in message or "Incomplete gateway" in message:
+        return "history_gaps"
+    if "Out-of-range" in message or "Nonfinite" in message:
+        return "invalid_readings"
+    return "model_error"
+
+
+def ack_retention_days() -> int:
+    raw = os.environ.get("HYGRON_ALERT_ACK_RETENTION_DAYS", str(DEFAULT_ACK_RETENTION_DAYS))
+    try:
+        days = int(raw)
+    except ValueError:
+        raise ValueError("HYGRON_ALERT_ACK_RETENTION_DAYS must be a whole number of days") from None
+    if days < 1:
+        raise ValueError("HYGRON_ALERT_ACK_RETENTION_DAYS must be at least 1")
+    return days
+
+
+def prune_alert_acknowledgments(retention_days: int, now: datetime | None = None) -> int:
+    """Delete acknowledgments recorded more than retention_days ago. Returns rows deleted."""
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
+    with shared_store.connect() as db:
+        rows = db.execute("SELECT alert_id, acknowledged_at FROM alert_acknowledgments").fetchall()
+        expired = []
+        for alert_id, acknowledged_at in rows:
+            stamp = datetime.fromisoformat(acknowledged_at)
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=MANILA)
+            if stamp < cutoff:
+                expired.append((alert_id,))
+        db.executemany("DELETE FROM alert_acknowledgments WHERE alert_id=?", expired)
+    return len(expired)
 
 
 def manila_timestamp(value: str | None) -> str | None:
@@ -49,6 +107,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
 
     app.state.cloud = shared_store.SQLiteCloud()
     seed_default_rooms(app.state.cloud)
+    app.state.ack_retention_days = ack_retention_days()
+    prune_alert_acknowledgments(app.state.ack_retention_days)
 
     try:
         app.state.models = load_models(str(MODEL_DIR))
@@ -80,12 +140,16 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "model_available": app.state.models is not None,
             "model_error": app.state.model_error,
         }
+        def unavailable(code: str, error: str) -> dict:
+            result["error"] = error
+            result["unavailable_code"] = code
+            result["unavailable_reason"] = unavailable_reason(code, len(rows))
+            return result
+
         if latest is None:
-            result["error"] = "No valid data"
-            return result
+            return unavailable("no_data", "No valid data")
         if app.state.models is None:
-            result["error"] = "ML model files unavailable"
-            return result
+            return unavailable("model_unavailable", "ML model files unavailable")
         try:
             features = latest_features(rows)
             estimate = estimate_risk(features, app.state.models)
@@ -95,7 +159,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             result["current_indicator"] = estimate["current_indicator"]
             result["forecast_indicator"] = estimate["forecast_indicator"]
         except (ValueError, KeyError, IndexError) as exc:
-            result["error"] = str(exc)
+            return unavailable(classify_feature_error(str(exc)), str(exc))
         return result
 
     @app.get("/api/health")
@@ -173,6 +237,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "required_history": status["required_history"],
             "model_available": status["model_available"],
             "error": status.get("error"),
+            "unavailable_code": status.get("unavailable_code"),
+            "unavailable_reason": status.get("unavailable_reason"),
             "is_simulated": True,
         }
 
@@ -191,8 +257,11 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "sufficient_history": status["sufficient_history"],
             "model_available": status["model_available"],
             "error": status.get("error"),
+            "unavailable_code": status.get("unavailable_code"),
+            "unavailable_reason": status.get("unavailable_reason"),
             "is_simulated": True,
             "confidence": "Unavailable",
+            "confidence_reason": CONFIDENCE_REASON,
             "disclaimer": "Supplementary simulated risk category; not a guaranteed or hourly warning.",
         }
 
@@ -245,6 +314,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
                 "error": app.state.model_error,
                 "model_dir": str(MODEL_DIR),
             },
+            "alert_acknowledgment_retention_days": app.state.ack_retention_days,
             "is_simulated": True,
         }
 
